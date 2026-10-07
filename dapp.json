@@ -3,7 +3,7 @@
   "secrets": [],
   "tests": [
     {
-      "name": "Rilo renders on / (setup or the firsts list)",
+      "name": "Rilo renders on / (setup or the kind cards)",
       "path": "/",
       "expectSelector": "[data-screen='setup'], [data-screen='app']"
     },
@@ -11,7 +11,7 @@
       "id": "firsts.demo",
       "name": "Populated demo (light)",
       "path": "/?demo=1&un-theme=light",
-      "expectSelector": ".first-row",
+      "expectSelector": ".kind-card",
       "expectText": "Staging demo",
       "visual": true,
       "impact": ["public/**", "styles/**", "tailwind.config.js", "server.js"]
@@ -19,7 +19,16 @@
     {
       "name": "Populated demo (dark)",
       "path": "/?demo=1&un-theme=dark",
-      "expectSelector": "html.dark .first-row"
+      "expectSelector": "html.dark .kind-card"
+    },
+    {
+      "id": "firsts.demo.words",
+      "name": "The Words list",
+      "path": "/?demo=1&kind=word&un-theme=light",
+      "expectSelector": ".first-row",
+      "expectText": "All firsts",
+      "visual": true,
+      "impact": ["public/**", "styles/**", "tailwind.config.js", "server.js"]
     }
   ]
 }

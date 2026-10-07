@@ -106,9 +106,12 @@ watching the timeline grow. Each entry also carries a **category**
 (people, animals, food, transport, play, body, home, outside, actions,
 words — inferred from the label, not asked) and a **mastery** toggle
 ("Still learning" by default, because a first word is usually partial:
-"wa" for water). One screen, one primary action ("Add a first");
-everything browses newest first grouped by age, as separate tappable
-module cards. Setup asks the child's name and birth month (month and
+"wa" for water). One screen, one primary action ("Add a first"); the
+main screen opens on three tappable kind cards — Words wide on top,
+Sounds and Signs side by side — each showing its block, its count and
+its latest first, and tapping a card opens that kind's list, newest
+first grouped by age, as separate tappable module cards. Setup asks the
+child's name and birth month (month and
 year, not a full birthday) once, then offers a quick start: tap the
 common words, sounds and signs the child already does, and they are
 saved dated the day the family started using Rilo. More than one child,
@@ -146,9 +149,10 @@ request changes the look on purpose.
   block. The icon set lives in `public/app.js` (`CATS`); the ten categories
   and their inference are under App-specific conventions. A mastered first
   wears a small sun badge with a check on the block's top-right corner.
-  The same three kind colours appear as small squares in the
-  All/Words/Sounds/Signs switch.
-- **Layout:** the timeline is a stack of separate rounded module cards
+  The same three kind colours set the Words, Sounds and Signs cards on
+  the main screen (`.kind-card`, each with a larger `.blk-lg` block).
+- **Layout:** the main screen is a grid of kind cards; a kind's list is a
+  stack of separate rounded module cards
   (`.list` / `.list-row`) — layered and tactile — not one connected
   grouped list; each card is itself the tap target, so this does not
   violate the no-cards-in-cards rule.
@@ -177,7 +181,8 @@ request changes the look on purpose.
 The kit is in `styles/tailwind-input.css`: colour tokens with a light and
 a dark value (named in `tailwind.config.js`), the two `@font-face` rules,
 and components (`btn-primary`, `btn-secondary`, `field`, `list` and
-`list-row`, `row-btn`, `seg`, `blk`, `chip`, `says`, `tag`, `bar`, `card`,
+`list-row`, `row-btn`, `kind-card`, `seg`, `blk`, `chip`, `says`, `tag`,
+`bar`, `card`,
 `section-label`, `skeleton`, `state-empty`, `state-error`). Re-theme by
 changing the token values there, keeping every text pair at 4.5:1 or more in
 both looks. The native UI kit's own `--un-*` variables are mapped onto the
@@ -220,6 +225,10 @@ tokens (both looks) in the same file.
   once per viewing account by `seedDemoFor()`; a viewer's own child is
   kept, a real save of name/birthday clears `is_demo`, and an account
   that already has entries of its own is never seeded at all.
+- A link can open a kind's list directly with `?kind=word`, `?kind=sound`
+  or `?kind=sign` (`public/app.js` reads it once at startup; an unknown
+  value shows the cards). Nothing on screen points to it; the automated
+  checks use it.
 - One capture identity runs all of dapp.json's checks, so never declare a
   check whose expectation depends on the account being empty — route the
   assertion through `?demo=1` or accept both final screens (see the `/`

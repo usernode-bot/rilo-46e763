@@ -227,6 +227,21 @@
     border-color: rgb(var(--sign) / 0.5);
   }
 
+  /* A kind card on the main screen: one big tap target per kind of first
+     (Words wide on top, Sounds and Signs below), with its block, count,
+     name and latest first. A button, never nested in another card. */
+  .kind-card {
+    @apply flex min-h-32 w-full flex-col justify-between gap-3 rounded-2xl border border-line bg-surface p-4
+      text-left text-fg hover:bg-raised
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus
+      focus-visible:ring-offset-2 focus-visible:ring-offset-ground;
+  }
+  /* The block, larger, on a kind card. Two classes, because catSvg() puts
+     the utility classes h-5 w-5 on the SVG and the utilities layer would
+     otherwise beat a one-class component rule. */
+  .blk.blk-lg { @apply h-14 w-14 rounded-2xl; }
+  .blk.blk-lg svg { @apply h-8 w-8; }
+
   /* Tap-to-pick chips (languages, the quick-start picks): <button
      class="chip">Spanish</button>, the chosen one with "chip-on" in the
      brand yellow. */

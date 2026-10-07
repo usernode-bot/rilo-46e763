@@ -1,5 +1,6 @@
 /* Rilo's client. Renders the whole screen into #app — setup, loading,
- * error, and the firsts list — and opens the add/edit sheet, the child
+ * error, the three kind cards, and a kind's firsts list — and opens the
+ * add/edit sheet, the child
  * sheet, the delete confirm and the toasts through the platform's
  * native UI kit (unNative), with a plain fallback when it is absent.
  *
@@ -22,6 +23,8 @@
     '<svg viewBox="0 0 24 24" class="h-5 w-5 flex-none" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
   var ICON_PENCIL =
     '<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
+  var ICON_BACK =
+    '<svg viewBox="0 0 24 24" class="h-5 w-5 flex-none" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
 
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -250,6 +253,12 @@
     return CATS[entry.category] || CATS.words;
   }
 
+  // The kind cards reuse three of the category drawings: a speech bubble
+  // for Words, an animal face for Sounds, a hand for Signs.
+  var KIND_ICONS = { word: CATS.words, sound: CATS.animals, sign: CATS.body };
+  // Each kind's block colour class, shared by the rows and the cards.
+  var BLK_CLASS = { word: 'blk-word', sound: 'blk-sound', sign: 'blk-sign' };
+
   // Phrases checked whole first, then single words. Order inside the lists
   // does not matter; the first category whose list matches wins.
   var CAT_PHRASES = {
@@ -308,6 +317,9 @@
     sessionLangs: [], // languages created this session, still unused
     quickPick: {}, // quick-start picks: item id -> true
   };
+  // A link can open a kind's list directly (`?kind=word`), so the automated
+  // checks can reach it; an unknown kind is ignored.
+  state.tab = KINDS[pageQuery.get('kind')] ? pageQuery.get('kind') : 'all';
 
   function countKind(kind) {
     return state.entries.filter(function (e) { return e.kind === kind; }).length;
@@ -411,12 +423,10 @@
 '<main data-screen="loading" class="mx-auto w-full max-w-md px-4 pb-32 pt-4">' +
 '  <div class="skeleton h-9 w-44"></div>' +
 '  <div class="skeleton mt-3 h-5 w-56"></div>' +
-'  <div class="skeleton mt-5 h-16 w-full rounded-xl"></div>' +
-'  <div class="skeleton mt-6 h-5 w-36"></div>' +
-'  <div class="mt-2 flex flex-col gap-2">' +
-'    <div class="skeleton h-16 w-full rounded-xl"></div>' +
-'    <div class="skeleton h-16 w-full rounded-xl"></div>' +
-'    <div class="skeleton h-16 w-full rounded-xl"></div>' +
+'  <div class="mt-4 grid grid-cols-2 gap-3">' +
+'    <div class="skeleton col-span-2 h-32 rounded-2xl"></div>' +
+'    <div class="skeleton h-36 rounded-2xl"></div>' +
+'    <div class="skeleton h-36 rounded-2xl"></div>' +
 '  </div>' +
 '</main>';
   }
@@ -524,35 +534,79 @@
         '<span>' + countLine + '</span></p>'
       : '') +
 '  </header>' +
-'  ' + segHtml() +
-'  <div id="firsts-area">' + listHtml() + '</div>' +
+    (state.tab === 'all' ? kindCardsHtml() : kindViewHtml()) +
 '</main>' +
 '<div class="bar un-safe-bottom"><div class="mx-auto w-full max-w-md px-4 pb-4 pt-3">' +
 '  <button type="button" id="add-first" class="btn-primary w-full">' + ICON_PLUS + 'Add a first</button>' +
 '</div></div>';
   }
 
-  function segHtml() {
-    var tabs = [
-      { key: 'all', label: 'All', count: state.entries.length, dot: '' },
-      { key: 'word', label: 'Words', count: countKind('word'), dot: 'bg-word' },
-      { key: 'sound', label: 'Sounds', count: countKind('sound'), dot: 'bg-sound' },
-      { key: 'sign', label: 'Signs', count: countKind('sign'), dot: 'bg-sign' },
-    ];
-    return '<div class="seg mt-4" role="tablist" aria-label="Show">' + tabs.map(function (t) {
-      return '<button type="button" role="tab" aria-selected="' + (state.tab === t.key) +
-        '" data-tab="' + t.key + '" class="' + (state.tab === t.key ? 'on' : '') + '">' +
-        '<b class="flex items-center gap-1.5">' +
-        (t.dot ? '<i class="inline-block h-2 w-2 rounded-sm ' + t.dot + '" aria-hidden="true"></i>' : '') +
-        t.label + '</b><span>' + t.count + '</span></button>';
-    }).join('') + '</div>';
+  // The main screen's cards view: one big tap target per kind of first —
+  // Words wide on top, Sounds and Signs side by side — each with its block,
+  // its count and its latest first.
+  function kindCardsHtml() {
+    return '<div class="mt-4 grid grid-cols-2 gap-3">' +
+      kindCardHtml('word', true) + kindCardHtml('sound', false) + kindCardHtml('sign', false) +
+      '</div>';
+  }
+
+  function kindCardHtml(kind, wide) {
+    var k = KINDS[kind];
+    var count = countKind(kind);
+    var latest = null;
+    for (var i = 0; i < state.entries.length; i++) {
+      if (state.entries[i].kind === kind) { latest = state.entries[i]; break; }
+    }
+    var latestLine = latest ? 'Latest: ' + latest.label + ', ' + fmtShort(latest.said_on) : k.empty;
+    var aria = k.many + ', ' + count + '. ' +
+      (latest ? 'Latest: ' + latest.label + ', ' + fmtLong(latest.said_on) : k.empty);
+    // Whole literals so the Tailwind extractor sees the classes.
+    if (wide) {
+      return '' +
+'<button type="button" class="kind-card col-span-2" data-open-kind="' + kind + '" aria-label="' + esc(aria) + '">' +
+'  <span class="blk blk-lg blk-word" aria-hidden="true">' + KIND_ICONS.word + '</span>' +
+'  <span class="flex items-end justify-between gap-3">' +
+'    <span class="min-w-0">' +
+'      <span class="block font-rounded text-heading">' + k.many + '</span>' +
+'      <span class="block truncate text-small text-muted">' + esc(latestLine) + '</span>' +
+'    </span>' +
+'    <span class="flex-none font-rounded text-title font-bold">' + count + '</span>' +
+'  </span>' +
+'</button>';
+    }
+    return '' +
+'<button type="button" class="kind-card" data-open-kind="' + kind + '" aria-label="' + esc(aria) + '">' +
+'  <span class="flex items-start justify-between">' +
+'    <span class="blk blk-lg ' + BLK_CLASS[kind] + '" aria-hidden="true">' + KIND_ICONS[kind] + '</span>' +
+'    <span class="flex-none font-rounded text-title font-bold">' + count + '</span>' +
+'  </span>' +
+'  <span class="min-w-0">' +
+'    <span class="block font-rounded text-heading">' + k.many + '</span>' +
+'    <span class="block truncate text-small text-muted">' + esc(latestLine) + '</span>' +
+'  </span>' +
+'</button>';
+  }
+
+  // One kind's list, newest first and grouped by age, with the way back to
+  // the cards at the top.
+  function kindViewHtml() {
+    var k = KINDS[state.tab];
+    var n = countKind(state.tab);
+    return '' +
+'<div class="mt-4">' +
+'  <button type="button" class="btn-secondary" data-back>' + ICON_BACK + 'All firsts</button>' +
+'  <div class="mt-3 flex items-baseline justify-between px-1">' +
+'    <h2 class="font-rounded text-title">' + k.many + '</h2>' +
+'    <span class="text-small text-muted">' +
+      n + ' ' + (n === 1 ? k.one.toLowerCase() : k.many.toLowerCase()) + '</span>' +
+'  </div>' +
+'  <div id="firsts-area">' + listHtml() + '</div>' +
+'</div>';
   }
 
   function listHtml() {
-    var rows = state.tab === 'all'
-      ? state.entries
-      : state.entries.filter(function (e) { return e.kind === state.tab; });
-    if (!rows.length) return emptyHtml(rows === state.entries);
+    var rows = state.entries.filter(function (e) { return e.kind === state.tab; });
+    if (!rows.length) return emptyHtml();
     var map = new Map();
     rows.forEach(function (e) {
       var age = ageMonths(state.child.birthday, e.said_on);
@@ -576,7 +630,7 @@
     var k = KINDS[e.kind];
     // Whole literals so the Tailwind extractor sees the classes (a class
     // built by concatenation is invisible to it and gets tree-shaken).
-    var blkClass = { word: 'blk-word', sound: 'blk-sound', sign: 'blk-sign' }[e.kind];
+    var blkClass = BLK_CLASS[e.kind];
     var subParts = [];
     if (e.sounds_like) {
       subParts.push(e.kind === 'sign'
@@ -607,15 +661,7 @@
 '</li>';
   }
 
-  function emptyHtml(noFirstsAtAll) {
-    if (noFirstsAtAll) {
-      return '' +
-'<div class="state-empty mt-6">' +
-'  <p class="text-body font-medium">No firsts yet.</p>' +
-'  <p class="text-body text-muted">Add the first word, animal sound or sign ' + esc(state.child.name) + ' makes.</p>' +
-'  <button type="button" class="btn-primary mt-2" data-add>' + ICON_PLUS + 'Add a first</button>' +
-'</div>';
-    }
+  function emptyHtml() {
     var k = KINDS[state.tab];
     return '' +
 '<div class="state-empty mt-6">' +
@@ -632,18 +678,29 @@
     var setupForm = app.querySelector('#setup-form');
     if (setupForm) setupForm.addEventListener('submit', onSetupSubmit);
 
-    app.querySelectorAll('[data-tab]').forEach(function (btn) {
+    app.querySelectorAll('[data-open-kind]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        state.tab = btn.getAttribute('data-tab');
+        state.tab = btn.getAttribute('data-open-kind');
         render();
+        window.scrollTo(0, 0);
+        var back = app.querySelector('[data-back]');
+        if (back) back.focus({ preventScroll: true });
+      });
+    });
+
+    app.querySelectorAll('[data-back]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var from = state.tab;
+        state.tab = 'all';
+        render();
+        window.scrollTo(0, 0);
+        var card = app.querySelector('[data-open-kind="' + from + '"]');
+        if (card) card.focus({ preventScroll: true });
       });
     });
 
     var addFirst = app.querySelector('#add-first');
     if (addFirst) addFirst.addEventListener('click', function () { openEntrySheet(null); });
-    app.querySelectorAll('[data-add]').forEach(function (btn) {
-      btn.addEventListener('click', function () { openEntrySheet(null); });
-    });
     app.querySelectorAll('[data-add-kind]').forEach(function (btn) {
       btn.addEventListener('click', function () { openEntrySheet(null, btn.getAttribute('data-add-kind')); });
     });
