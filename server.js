@@ -39,6 +39,14 @@ const PUBLIC_API_PATHS = new Set(['/health']);
 
 app.use(express.json());
 
+// API answers are per-person and change on every save: never let a browser
+// reuse one (a cached /api/state would show a list edits have already
+// moved).
+app.use('/api', function (_req, res, next) {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 // The platform's three centrally hosted files — the bridge, the native UI
 // kit and the Tailwind runtime — are reachable at these paths on this app's
 // OWN origin, so index.html can load them with a RELATIVE path and never
@@ -164,6 +172,15 @@ function validDate(value) {
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString().slice(0, 10) === value ? value : null;
 }
+// Birth months travel as `YYYY-MM` and are stored as the month's first day,
+// so ages count whole calendar months from the month itself. The parent
+// picks the month and the year, never the day (the creator's ask).
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+function validMonth(value) {
+  if (typeof value !== 'string' || !MONTH_RE.test(value)) return null;
+  const d = new Date(value + '-01T00:00:00Z');
+  return d.toISOString().slice(0, 7) === value ? value : null;
+}
 function serverToday(now) {
   return now.toISOString().slice(0, 10);
 }
@@ -176,6 +193,12 @@ function addDays(iso, n) {
 // server's UTC day is not told their today is in the future.
 function latestAllowedDay(now) {
   return addDays(serverToday(now), 1);
+}
+// The same slack, in whole months: the month after the server's current one
+// is still allowed as a birth month, so a parent just inside their own next
+// month is not rejected.
+function latestAllowedMonth(now) {
+  return latestAllowedDay(now).slice(0, 7);
 }
 
 // One async handler wrapper so a rejected query answers 500 instead of
@@ -237,13 +260,15 @@ app.put('/api/child', wrap(async (req, res) => {
   if (name.length < 1 || name.length > 40) {
     return res.status(400).json({ error: 'Add a name between 1 and 40 characters.' });
   }
-  const birthday = validDate(req.body.birthday);
-  if (!birthday) {
-    return res.status(400).json({ error: 'Pick a birthday.' });
+  const birthMonth = validMonth(req.body.birth_month);
+  if (!birthMonth) {
+    return res.status(400).json({ error: 'Pick a birth month and year.' });
   }
-  if (birthday < '1990-01-01' || birthday > latestAllowedDay(req.now)) {
-    return res.status(400).json({ error: 'Pick a birthday between 1990 and today.' });
+  if (birthMonth < '1990-01' || birthMonth > latestAllowedMonth(req.now)) {
+    return res.status(400).json({ error: 'Pick a month between January 1990 and this one.' });
   }
+  // Stored as the month's first day; every age is counted from the month.
+  const birthday = birthMonth + '-01';
   const saved = await pool.query(
     `INSERT INTO children (owner_id, name, birthday)
      VALUES ($1, $2, $3)
@@ -356,6 +381,66 @@ app.post('/api/entries', wrap(async (req, res) => {
      values.said_on, values.note]);
   const row = await pool.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
   res.status(201).json(row.rows[0]);
+}));
+
+// The quick start onboarding: everything the child already does, tapped in
+// one go on the day the family started using Rilo. Each pick is saved as an
+// ordinary first dated today (server's today, the same slack as elsewhere),
+// with no language and no note — the parent can edit any of them later.
+app.post('/api/quick-start', wrap(async (req, res) => {
+  const ownerId = String(req.user.id);
+  const items = Array.isArray(req.body.items) ? req.body.items : null;
+  if (!items || !items.length) {
+    return res.status(400).json({ error: 'Choose at least one first to add.' });
+  }
+  if (items.length > 30) {
+    return res.status(400).json({ error: 'Add up to 30 at a time.' });
+  }
+  const child = await pool.query(
+    'SELECT birthday::text AS birthday FROM children WHERE owner_id = $1',
+    [ownerId]);
+  if (!child.rows.length) {
+    return res.status(400).json({ error: "Add your child's name and birthday first." });
+  }
+  // The birth month may sit one month past the server's today (the same
+  // slack the birth month allows), so never save before the birthday.
+  const today = serverToday(req.now);
+  const saidOn = today < child.rows[0].birthday ? child.rows[0].birthday : today;
+  const values = items.map(function (item) {
+    if (!item || typeof item !== 'object') return null;
+    const kind = item.kind;
+    if (kind !== 'word' && kind !== 'sound' && kind !== 'sign') return null;
+    const label = typeof item.label === 'string' ? item.label.trim() : '';
+    if (label.length < 1 || label.length > 60) return null;
+    const sounds_like = typeof item.sounds_like === 'string' ? item.sounds_like.trim() : '';
+    if (sounds_like.length > 80) return null;
+    return [kind, label, sounds_like || null];
+  });
+  if (values.some(function (v) { return v === null; })) {
+    return res.status(400).json({ error: 'One of the picks is missing its word, animal or sign.' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const rows = [];
+    for (const v of values) {
+      const inserted = await client.query(
+        `INSERT INTO entries (owner_id, kind, label, sounds_like, said_on)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [ownerId, v[0], v[1], v[2], saidOn]);
+      // Same client as the INSERT: the rows are not committed yet, so a
+      // pool query would not see them.
+      const row = await client.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
+      rows.push(row.rows[0]);
+    }
+    await client.query('COMMIT');
+    res.status(201).json({ entries: rows });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }));
 
 app.patch('/api/entries/:id', wrap(async (req, res) => {

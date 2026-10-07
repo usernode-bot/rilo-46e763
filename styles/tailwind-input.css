@@ -13,41 +13,63 @@
 @tailwind utilities;
 
 /* ── Colour tokens ────────────────────────────────────────────────────────
- * Rilo's palette, from the subject: firsts are coloured like wooden
- * alphabet blocks (brick red words, meadow green sounds, block blue signs)
- * sitting on warm paper neutrals. The action colour is plain ink, so the
- * blocks carry the colour on the screen. Each value is "R G B";
- * tailwind.config.js names them. :root is the light look, and .dark, which
- * the theme script in public/index.html sets on <html>, the dark one.
+ * Rilo's palette follows the brand look (gaiababy.app): warm green-tinted
+ * paper, olive ink and secondary text, a moss green action colour and the
+ * brand yellow for a chosen state. The three kinds of first keep their own
+ * block colours, re-tuned to sit in that palette: terracotta words, moss
+ * sounds, slate blue signs. Each value is "R G B"; tailwind.config.js
+ * names them. :root is the light look, and .dark, which the theme script
+ * in public/index.html sets on <html>, the dark one (derived from the same
+ * hues; the brand site itself ships only a light look).
  *
  * Re-theme the app HERE: change the values, keep the names. Keep every text
  * pair at 4.5:1 or more in both looks: fg and muted on ground, surface and
- * raised; on-accent on accent; each kind colour on its soft colour and on
- * surface; danger on ground and surface.
+ * raised; on-accent on accent; on-sun on sun; each kind colour on its soft
+ * colour and on surface; danger on ground and surface.
  *
  * The kit's variables for the native UI kit point at these tokens (both
  * looks, since a var() inside a custom property is substituted where it is
  * declared).
  */
 @layer base {
+  /* The brand faces: Figtree for headings and the blocks, Inter for body
+     text (tailwind.config.js names them). Variable, latin subset, self-
+     hosted so the app makes no third-party request at runtime. */
+  @font-face {
+    font-family: Figtree;
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url('/fonts/figtree-var-latin.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: Inter;
+    font-style: normal;
+    font-weight: 400 600;
+    font-display: swap;
+    src: url('/fonts/inter-var-latin.woff2') format('woff2');
+  }
+
   :root {
-    --ground: 250 247 242;    /* the paper page */
+    --ground: 246 247 244;    /* the paper page (#F6F7F4) */
     --surface: 255 255 255;   /* lists, sheet, fields */
-    --raised: 243 239 232;    /* switch track, tags */
-    --fg: 33 30 27;           /* text */
-    --muted: 99 92 84;        /* secondary text */
-    --line: 228 222 213;      /* borders, dividers, skeletons */
-    --accent: 33 30 27;       /* ink: Add a first, chosen language */
-    --on-accent: 250 247 242; /* text on the accent */
-    --word: 178 52 40;        /* words: brick red block */
-    --word-soft: 251 230 225;
-    --sound: 46 112 58;       /* animal sounds: meadow green block */
-    --sound-soft: 224 240 222;
-    --sign: 38 86 160;        /* signs: block blue */
-    --sign-soft: 223 233 248;
-    --danger: 185 28 28;
+    --raised: 227 229 216;    /* switch track, tags (#E3E5D8) */
+    --fg: 29 29 27;           /* text (#1D1D1B) */
+    --muted: 90 91 72;        /* secondary text (#5A5B48) */
+    --line: 223 225 214;      /* borders, dividers, skeletons */
+    --accent: 69 80 43;       /* moss: Add a first (#45502B) */
+    --on-accent: 242 242 237; /* text on the accent (#F2F2ED) */
+    --sun: 254 233 81;        /* brand yellow: a chosen chip (#FEE951) */
+    --on-sun: 29 29 27;
+    --word: 168 68 44;        /* words: terracotta block */
+    --word-soft: 247 227 219;
+    --sound: 85 98 47;        /* animal sounds: moss green block */
+    --sound-soft: 228 235 213;
+    --sign: 63 94 126;        /* signs: slate blue block */
+    --sign-soft: 222 231 239;
+    --danger: 176 58 42;
     --on-danger: 255 255 255;
-    --focus: 38 86 160;      /* the keyboard focus ring */
+    --focus: 69 80 43;        /* the keyboard focus ring */
 
     --un-accent: rgb(var(--accent));
     --un-accent-contrast: rgb(var(--on-accent));
@@ -57,23 +79,25 @@
     --un-action-danger: rgb(var(--danger));
   }
   .dark {
-    --ground: 22 20 18;
-    --surface: 33 30 27;
-    --raised: 45 41 37;
-    --fg: 245 241 234;
-    --muted: 176 168 158;
-    --line: 64 59 53;
-    --accent: 245 241 234;
-    --on-accent: 22 20 18;
-    --word: 245 140 120;
-    --word-soft: 74 34 28;
-    --sound: 132 200 140;
-    --sound-soft: 30 58 34;
-    --sign: 140 178 240;
-    --sign-soft: 30 44 74;
-    --danger: 248 113 113;
-    --on-danger: 69 10 10;
-    --focus: 140 178 240;
+    --ground: 27 28 24;
+    --surface: 36 38 32;
+    --raised: 48 51 42;
+    --fg: 240 241 234;
+    --muted: 168 172 152;
+    --line: 62 66 54;
+    --accent: 150 165 96;
+    --on-accent: 24 25 21;
+    --sun: 254 233 81;
+    --on-sun: 29 29 27;
+    --word: 232 154 126;
+    --word-soft: 74 42 31;
+    --sound: 180 199 126;
+    --sound-soft: 43 51 32;
+    --sign: 156 187 217;
+    --sign-soft: 38 48 60;
+    --danger: 235 130 110;
+    --on-danger: 42 16 12;
+    --focus: 150 165 96;
 
     --un-accent: rgb(var(--accent));
     --un-accent-contrast: rgb(var(--on-accent));
@@ -93,15 +117,17 @@
  * A small kit on the tokens. Use these rather than restyling the same thing
  * by hand, add to them sparingly, and change a component here rather than
  * one copy of it. Type: text-title, text-heading, text-body and text-small
- * (tailwind.config.js), nothing in between; headings in the rounded face
- * (font-rounded), how a first sounds in the italic serif (.says).
+ * (tailwind.config.js), nothing in between; headings in Figtree
+ * (font-rounded), body in Inter, how a first sounds in the italic serif
+ * (.says). Shapes follow the brand look: pill buttons and chips, soft
+ * 12–16 px corners elsewhere.
  */
 @layer components {
   /* Buttons: one primary per screen, the rest secondary. At least 44 px
      each way, so they are easy to tap. */
   .btn-primary,
   .btn-secondary {
-    @apply inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-4 text-body font-medium
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full px-4 text-body font-medium
       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2
       focus-visible:ring-offset-ground disabled:cursor-not-allowed disabled:opacity-50;
   }
@@ -116,14 +142,14 @@
      The placeholder is a faint hint (muted at 60%), so an example such as
      "e.g. ball" never reads as a value somebody already typed in. */
   .field {
-    @apply block min-h-11 w-full rounded-lg border border-line bg-surface px-3 py-2 text-body text-fg
+    @apply block min-h-11 w-full rounded-xl border border-line bg-surface px-3 py-2 text-body text-fg
       placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-focus;
   }
 
   /* A grouped list: <ul class="list"> of <li class="list-row">. The usual
      way to show several things; prefer it to a stack of cards. */
   .list {
-    @apply divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface;
+    @apply divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface;
   }
   .list-row {
     @apply flex min-h-11 items-center gap-3 px-4 py-3;
@@ -167,7 +193,7 @@
      bottom edge in the kind's colour. <span class="blk blk-word">A</span>.
      Always aria-hidden; the row's button carries the name. */
   .blk {
-    @apply flex h-10 w-10 flex-none items-center justify-center rounded-lg text-heading font-bold;
+    @apply flex h-10 w-10 flex-none items-center justify-center rounded-xl text-heading font-bold;
     border-bottom-width: 3px;
   }
   .blk-word {
@@ -186,14 +212,15 @@
     border-color: rgb(var(--sign) / 0.5);
   }
 
-  /* Tap-to-pick language chips: <button class="chip">Spanish</button>, the
-     chosen one with "chip-on". */
+  /* Tap-to-pick chips (languages, the quick-start picks): <button
+     class="chip">Spanish</button>, the chosen one with "chip-on" in the
+     brand yellow. */
   .chip {
     @apply inline-flex min-h-11 items-center gap-1 rounded-full border border-line bg-surface px-3.5 text-small text-fg
       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
   }
   .chip-on {
-    @apply border-accent bg-accent font-semibold text-on-accent;
+    @apply border-sun bg-sun font-semibold text-on-sun;
   }
 
   /* How the child says it, written like a parent's note in a baby book. */

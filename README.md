@@ -12,20 +12,27 @@ list reads as a growing timeline.
   filters All, Words, Sounds or Signs; **Add a first** (pinned to the
   bottom) opens a small form: kind, the word/animal/sign, how the child
   says or signs it, a language, a date and an optional note.
-- **Setup once.** On first use Rilo asks for the child's name and
-  birthday; ages are whole months counted from it. The pencil button next
-  to the title edits both.
+- **Setup once, then a quick start.** On first use Rilo asks for the
+  child's name and birth month (month and year — no full birthday); ages
+  are whole months counted from it. Then a quick-start screen offers
+  common words, animal sounds and signs to tap, saving everything the
+  child already does dated that day, so nothing has to be typed in one by
+  one. The pencil button next to the title edits the name and birth month.
 - **Languages are your own.** There is no preset list — add each one you
   use ("New language" in the form) and it stays a choice. A language can
   be attached to any kind of first.
-- **Light and dark** looks follow the viewer's Homeroom theme.
+- **Light and dark** looks follow the viewer's Homeroom theme. The brand
+  look follows gaiababy.app: warm green-tinted paper, olive ink, a moss
+  green action colour, a brand yellow for chosen chips, pill buttons, and
+  Figtree/Inter type (self-hosted in `public/fonts`).
 
 ## Data model
 
 All four tables are `staging:private` (personal family data) and scoped
 per owner (`owner_id = String(req.user.id)` on every query):
 
-- `children` — one child per person: name, birthday.
+- `children` — one child per person: name, birthday (stored as the birth
+  month's first day; the parent picks month and year).
 - `languages` — the owner's own language list, unique case-insensitively.
 - `entries` — one first: `kind` (`word` | `sound` | `sign`), `label`,
   `sounds_like` (how it sounds or is signed), optional `language_id`,

@@ -105,6 +105,22 @@
     return longFmt.format(new Date(iso + 'T00:00:00'));
   }
 
+  // The birth month and year, two selects: month and year is all a birthday
+  // needs to be here, and a select works on every phone (the creator's ask).
+  function monthSelectHtml(id, mm) {
+    return '<select id="' + id + '" class="field">' + MONTH_NAMES.map(function (m, i) {
+      var v = pad(i + 1);
+      return '<option value="' + v + '"' + (mm === v ? ' selected' : '') + '>' + m + '</option>';
+    }).join('') + '</select>';
+  }
+  function yearSelectHtml(id, yyyy) {
+    var opts = [];
+    for (var y = nowDate().getFullYear(); y >= 1990; y--) {
+      opts.push('<option value="' + y + '"' + (yyyy === y ? ' selected' : '') + '>' + y + '</option>');
+    }
+    return '<select id="' + id + '" class="field">' + opts.join('') + '</select>';
+  }
+
   // ── Words for things ─────────────────────────────────────────────────
   var KINDS = {
     word: {
@@ -124,15 +140,45 @@
     },
   };
 
+  // The quick start: common firsts a parent can tap in one go instead of
+  // adding everything by hand (the creator's ask). Each pick is saved as an
+  // ordinary first dated today.
+  var QUICK_STARTS = [
+    { group: 'Words', kind: 'word', items: [
+      { label: 'mama' }, { label: 'dada' }, { label: 'ball' }, { label: 'milk' },
+      { label: 'water' }, { label: 'bye' }, { label: 'no' }, { label: 'uh-oh' },
+      { label: 'kitty' }, { label: 'dog' }, { label: 'book' }, { label: 'more' },
+    ] },
+    { group: 'Animal sounds', kind: 'sound', items: [
+      { label: 'cow', sounds_like: 'moo' },
+      { label: 'dog', sounds_like: 'woof woof' },
+      { label: 'cat', sounds_like: 'meow' },
+      { label: 'sheep', sounds_like: 'baa' },
+      { label: 'duck', sounds_like: 'quack' },
+      { label: 'car', sounds_like: 'vroom' },
+    ] },
+    { group: 'Signs', kind: 'sign', items: [
+      { label: 'more', sounds_like: 'Taps fingertips together' },
+      { label: 'milk', sounds_like: 'Squeezes a fist' },
+      { label: 'all done', sounds_like: 'Twists both hands' },
+      { label: 'bye', sounds_like: 'Opens and closes a hand' },
+      { label: 'eat', sounds_like: 'Taps fingers to mouth' },
+    ] },
+  ];
+
+  var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
   // ── State ────────────────────────────────────────────────────────────
   var state = {
-    screen: 'loading', // loading | error | app
+    screen: 'loading', // loading | error | app | quickstart
     loadError: null,
     child: null,
     languages: [],
     entries: [],
     tab: 'all',
     sessionLangs: [], // languages created this session, still unused
+    quickPick: {}, // quick-start picks: item id -> true
   };
 
   function countKind(kind) {
@@ -227,6 +273,7 @@
     if (state.screen === 'loading') app.innerHTML = loadingHtml();
     else if (state.screen === 'error') app.innerHTML = errorHtml();
     else if (!state.child) app.innerHTML = setupHtml();
+    else if (state.screen === 'quickstart') app.innerHTML = quickstartHtml();
     else app.innerHTML = mainHtml();
     bind();
   }
@@ -259,23 +306,67 @@
   }
 
   function setupHtml() {
+    var now = nowDate();
     return '' +
 '<main data-screen="setup" class="mx-auto w-full max-w-md px-4 py-10">' +
 '  <h1 class="font-rounded text-title">Start tracking</h1>' +
-'  <p class="mt-1 text-body text-muted">Tell Rilo whose firsts these are. The birthday is what lets every first show how old the child was.</p>' +
+'  <p class="mt-1 text-body text-muted">Tell Rilo whose firsts these are. The birth month is what lets every first show how old the child was.</p>' +
 '  <form id="setup-form" class="mt-6 flex flex-col gap-4" novalidate>' +
 '    <div>' +
 '      <label class="mb-1 block text-small font-medium" for="setup-name">Name</label>' +
 '      <input id="setup-name" class="field" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Leo">' +
 '    </div>' +
-'    <div>' +
-'      <label class="mb-1 block text-small font-medium" for="setup-birthday">Birthday</label>' +
-'      <input id="setup-birthday" class="field" type="date" max="' + todayIso() + '">' +
+'    <div class="grid grid-cols-2 gap-3">' +
+'      <div>' +
+'        <label class="mb-1 block text-small font-medium" for="setup-month">Birth month</label>' +
+          monthSelectHtml('setup-month', pad(now.getMonth() + 1)) +
+'      </div>' +
+'      <div>' +
+'        <label class="mb-1 block text-small font-medium" for="setup-year">Birth year</label>' +
+          yearSelectHtml('setup-year', now.getFullYear()) +
+'      </div>' +
 '    </div>' +
 '    <p id="setup-error" hidden class="text-small text-danger"></p>' +
 '    <button type="submit" class="btn-primary">Start tracking</button>' +
 '  </form>' +
 '</main>';
+  }
+
+  // The quick start, straight after setup: tap what the child already does,
+  // save them all dated today, or skip and add firsts one at a time.
+  function quickstartHtml() {
+    var name = state.child.name;
+    var n = Object.keys(state.quickPick).length;
+    return '' +
+'<main data-screen="quickstart" class="mx-auto w-full max-w-md px-4 pb-32 pt-4">' +
+'  <h1 class="font-rounded text-title">What does ' + esc(name) + ' already do?</h1>' +
+'  <p class="mt-1 text-body text-muted">Tap everything ' + esc(name) +
+      ' already says or signs. Rilo saves them dated today, ' + esc(fmtLong(todayIso())) +
+      '. You can edit or delete any of them later.</p>' +
+    QUICK_STARTS.map(function (group) {
+      return '<p class="section-label mt-6">' + esc(group.group) + '</p>' +
+'<div class="flex flex-wrap gap-2">' +
+        group.items.map(function (item, i) {
+          var id = group.kind + '-' + i;
+          var text = item.sounds_like && group.kind === 'sound'
+            ? item.label + ' · ' + item.sounds_like
+            : item.label;
+          return '<button type="button" class="chip' +
+            (state.quickPick[id] ? ' chip-on' : '') +
+            '" data-quick="' + id + '" aria-pressed="' + !!state.quickPick[id] + '">' +
+            esc(text) + '</button>';
+        }).join('') +
+'</div>';
+    }).join('') +
+'  <p data-form-error hidden class="mt-4 text-small text-danger"></p>' +
+'</main>' +
+'<div class="bar un-safe-bottom"><div class="mx-auto w-full max-w-md px-4 pb-4 pt-3">' +
+'  <div class="flex gap-2">' +
+'    <button type="button" id="quick-add" class="btn-primary flex-1"' + (n ? '' : ' disabled') + '>' +
+      (n ? (n === 1 ? 'Add 1 first' : 'Add ' + n + ' firsts') : 'Add firsts') + '</button>' +
+'    <button type="button" id="quick-skip" class="btn-secondary">Skip</button>' +
+'  </div>' +
+'</div></div>';
   }
 
   function mainHtml() {
@@ -285,8 +376,8 @@
     var countLine = '';
     if (n) {
       var langs = languagesUsed();
-      countLine = n + (n === 1 ? ' first' : ' firsts') + ' in ' + langs +
-        (langs === 1 ? ' language' : ' languages');
+      countLine = n + (n === 1 ? ' first' : ' firsts') +
+        (langs ? ' in ' + langs + (langs === 1 ? ' language' : ' languages') : '');
     }
     return '' +
 '<main data-screen="app" class="mx-auto w-full max-w-md px-4 pb-32 pt-4">' +
@@ -296,7 +387,7 @@
 '        <h1 class="font-rounded text-title">' + esc(name) + "'s firsts</h1>" +
 '        <p class="mt-0.5 text-body text-muted">' + esc(formatAge(monthsToday, name)) + ' today</p>' +
 '      </div>' +
-'      <button type="button" id="edit-child" class="btn-secondary" aria-label="Edit ' + esc(name) + "'s name and birthday\">" + ICON_PENCIL +
+'      <button type="button" id="edit-child" class="btn-secondary" aria-label="Edit ' + esc(name) + "'s name and birth month\">" + ICON_PENCIL +
 '      </button>' +
 '    </div>' +
     (countLine
@@ -428,6 +519,22 @@
       btn.addEventListener('click', function () { openEntrySheet(null, btn.getAttribute('data-add-kind')); });
     });
 
+    var quickAdd = app.querySelector('#quick-add');
+    if (quickAdd) quickAdd.addEventListener('click', onQuickAdd);
+    var quickSkip = app.querySelector('#quick-skip');
+    if (quickSkip) quickSkip.addEventListener('click', function () {
+      state.screen = 'app';
+      render();
+    });
+    app.querySelectorAll('[data-quick]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var id = chip.getAttribute('data-quick');
+        if (state.quickPick[id]) delete state.quickPick[id];
+        else state.quickPick[id] = true;
+        render();
+      });
+    });
+
     var editChild = app.querySelector('#edit-child');
     if (editChild) editChild.addEventListener('click', openChildSheet);
 
@@ -450,27 +557,57 @@
   async function onSetupSubmit(event) {
     event.preventDefault();
     var nameEl = app.querySelector('#setup-name');
-    var birthdayEl = app.querySelector('#setup-birthday');
     var errEl = app.querySelector('#setup-error');
     errEl.hidden = true;
     var name = nameEl.value.trim();
-    var birthday = birthdayEl.value;
-    if (!name || !birthday) {
-      errEl.textContent = name ? 'Pick a birthday.' : "Add the child's name.";
+    if (!name) {
+      errEl.textContent = "Add the child's name.";
       errEl.hidden = false;
       return;
     }
+    var birthMonth = app.querySelector('#setup-year').value + '-' +
+      app.querySelector('#setup-month').value;
     var button = app.querySelector('#setup-form button[type="submit"]');
     button.disabled = true;
     try {
       var child = await api('/api/child', {
         method: 'PUT',
-        body: JSON.stringify({ name: name, birthday: birthday }),
+        body: JSON.stringify({ name: name, birth_month: birthMonth }),
       });
       state.child = child;
+      state.quickPick = {};
+      // Straight into the quick start, so a family arriving with a child
+      // who already talks can load what they know in one go.
+      state.screen = 'quickstart';
+      render();
+    } catch (err) {
+      showFormError(errEl, err);
+      button.disabled = false;
+    }
+  }
+
+  async function onQuickAdd() {
+    var errEl = app.querySelector('[data-form-error]');
+    errEl.hidden = true;
+    var items = [];
+    QUICK_STARTS.forEach(function (group) {
+      group.items.forEach(function (item, i) {
+        if (state.quickPick[group.kind + '-' + i]) {
+          items.push({ kind: group.kind, label: item.label, sounds_like: item.sounds_like || '' });
+        }
+      });
+    });
+    var button = app.querySelector('#quick-add');
+    button.disabled = true;
+    try {
+      var saved = await api('/api/quick-start', {
+        method: 'POST',
+        body: JSON.stringify({ items: items }),
+      });
+      state.entries = saved.entries || [];
       state.screen = 'app';
       render();
-      toast('Details saved');
+      toast('Added ' + items.length + (items.length === 1 ? ' first' : ' firsts'));
     } catch (err) {
       showFormError(errEl, err);
       button.disabled = false;
@@ -507,6 +644,8 @@
   // ── The child sheet ──────────────────────────────────────────────────
   function openChildSheet() {
     var name = state.child.name;
+    var mm = state.child.birthday.slice(5, 7);
+    var yyyy = Number(state.child.birthday.slice(0, 4));
     var content = document.createElement('form');
     content.novalidate = true;
     content.className = 'pt-1';
@@ -517,9 +656,11 @@
 '</div>' +
 '<label class="mb-1 block text-small font-medium" for="child-name">Name</label>' +
 '<input id="child-name" class="field" type="text" maxlength="40" autocomplete="off" value="' + esc(name) + '">' +
-'<label class="mb-1 mt-4 block text-small font-medium" for="child-birthday">Birthday</label>' +
-'<input id="child-birthday" class="field" type="date" value="' + esc(state.child.birthday) + '" max="' + todayIso() + '">' +
-'<p class="mt-1 text-small text-muted">Ages count from the birthday.</p>' +
+'<label class="mb-1 mt-4 block text-small font-medium" for="child-month">Birth month</label>' +
+    monthSelectHtml('child-month', mm) +
+'<label class="mb-1 mt-4 block text-small font-medium" for="child-year">Birth year</label>' +
+    yearSelectHtml('child-year', yyyy) +
+'<p class="mt-1 text-small text-muted">Ages count from the birth month.</p>' +
 '<p data-form-error hidden class="mt-2 text-small text-danger"></p>' +
 '<button type="submit" class="btn-primary mt-4 w-full">Save changes</button>';
     var errEl = content.querySelector('[data-form-error]');
@@ -529,18 +670,19 @@
       event.preventDefault();
       errEl.hidden = true;
       var nextName = content.querySelector('#child-name').value.trim();
-      var birthday = content.querySelector('#child-birthday').value;
-      if (!nextName || !birthday) {
-        errEl.textContent = nextName ? 'Pick a birthday.' : "Add the child's name.";
+      if (!nextName) {
+        errEl.textContent = "Add the child's name.";
         errEl.hidden = false;
         return;
       }
+      var birthMonth = content.querySelector('#child-year').value + '-' +
+        content.querySelector('#child-month').value;
       var button = content.querySelector('button[type="submit"]');
       button.disabled = true;
       try {
         var child = await api('/api/child', {
           method: 'PUT',
-          body: JSON.stringify({ name: nextName, birthday: birthday }),
+          body: JSON.stringify({ name: nextName, birth_month: birthMonth }),
         });
         state.child = child;
         render();

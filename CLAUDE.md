@@ -103,35 +103,47 @@ sign), how the child says it, an optional language of the parent's own
 choosing, and the date — and every entry shows how old the child was,
 because the whole point is watching the timeline grow. One screen, one
 primary action ("Add a first"); everything browses newest first grouped
-by age. More than one child, audio recordings of pronunciation, and
-renaming languages are later scope, not current.
+by age. Setup asks the child's name and birth month (month and year, not
+a full birthday) once, then offers a quick start: tap the common words,
+sounds and signs the child already does, and they are saved dated the day
+the family started using Rilo. More than one child, audio recordings of
+pronunciation, and renaming languages are later scope, not current.
 
 ## Design
 
-This app's look. The first real version fills in the blanks; every later
-change follows it, and updates it when a request changes the look on purpose.
+This app's look, set by the creator to follow the brand feel of
+[gaiababy.app](https://gaiababy.app/) (warm green-tinted paper, olive ink,
+moss action, a brand yellow accent, soft pill shapes). Every later change
+follows it, and updates it when a request changes the look on purpose.
 
-- **Palette:** warm paper neutrals (ground `250 247 242` / dark `22 20 18`,
-  with surface, raised, fg, muted, line tokens to match), a plain **ink**
-  action colour (accent = fg), and three alphabet-block colours, one per
-  kind of first: **brick red** for words (`word`/`word-soft` = `178 52 40`
-  on `251 230 225`), **meadow green** for animal sounds (`sound`/`sound-soft`
-  = `46 112 58` on `224 240 222`), and **block blue** for signs
-  (`sign`/`sign-soft` = `38 86 160` on `223 233 248`). Dark values are in
-  the token file; every text pair is at 4.5:1 in both looks.
+- **Palette** (values live in `styles/tailwind-input.css`): warm green-tinted
+  paper (ground `246 247 244` / dark `27 28 24`), white surfaces, raised
+  `227 229 216`, ink text `29 29 27`, olive secondary text `90 91 72`. The
+  action colour is **moss green** (accent `69 80 43` with `242 242 237` on
+  it), and the brand **yellow** (`sun` `254 233 81` with ink text) marks a
+  chosen chip — never a primary button. Three block colours, one per kind of
+  first: **terracotta** for words (`word`/`word-soft` = `168 68 44` on
+  `247 227 219`), **moss green** for animal sounds (`sound`/`sound-soft` =
+  `85 98 47` on `228 235 213`), and **slate blue** for signs
+  (`sign`/`sign-soft` = `63 94 126` on `222 231 239`). Dark values are in
+  the token file, derived from the same hues; every text pair is at 4.5:1 in
+  both looks.
 - **Signature element:** the **alphabet block** — every first starts with a
   40 px rounded square showing its initial in the rounded face, on its
   kind's soft colour with a thicker bottom edge in the kind's colour, so it
   reads as a wooden toy block. The same three colours appear as small
   squares in the All/Words/Sounds/Signs switch.
-- **Type scale:** `text-title`, `text-heading`, `text-body`, `text-small`
-  (unchanged in `tailwind.config.js`). Headings and the blocks use
-  `font-rounded` (ui-rounded, friendly without being babyish); how a child
+- **Type:** Figtree for headings and the blocks (`font-rounded`), Inter for
+  body text, both self-hosted variable fonts in `public/fonts`; how a child
   says a word is `.says`, an italic serif inside curly quotes, like a
-  handwritten note in a baby book; everything else is the system sans.
+  handwritten note in a baby book. Scale: `text-title`, `text-heading`,
+  `text-body`, `text-small`, nothing in between.
+- **Shapes:** pill buttons and chips (`rounded-full`), soft 12–16 px corners
+  on fields, lists and blocks.
 - Colour comes only from the tokens (`bg-ground`, `bg-surface`,
   `text-fg`, `text-muted`, `border-line`, `bg-accent` with
-  `text-on-accent`, ...): never a raw hex value or a stock palette class.
+  `text-on-accent`, `bg-sun` with `text-on-sun`, ...): never a raw hex value
+  or a stock palette class.
 - Tap targets are at least 44 px; the buttons and fields already are.
 - A field's label says what it is; its placeholder, if any, is an example
   that says so ("e.g. 5.0"), never a bare value that could pass for one
@@ -144,23 +156,28 @@ change follows it, and updates it when a request changes the look on purpose.
 - No cards in cards, no uppercase eyebrows, no emoji as icons.
 
 The kit is in `styles/tailwind-input.css`: colour tokens with a light and
-a dark value (named in `tailwind.config.js`), and components (`btn-primary`,
-`btn-secondary`, `field`, `list` and `list-row`, `row-btn`, `seg`, `blk`,
-`chip`, `says`, `tag`, `bar`, `card`, `section-label`, `skeleton`,
-`state-empty`, `state-error`). Re-theme by changing the token values there,
-keeping every text pair at 4.5:1 or more in both looks. The native UI kit's
-own `--un-*` variables are mapped onto the tokens (both looks) in the same
-file.
+a dark value (named in `tailwind.config.js`), the two `@font-face` rules,
+and components (`btn-primary`, `btn-secondary`, `field`, `list` and
+`list-row`, `row-btn`, `seg`, `blk`, `chip`, `says`, `tag`, `bar`, `card`,
+`section-label`, `skeleton`, `state-empty`, `state-error`). Re-theme by
+changing the token values there, keeping every text pair at 4.5:1 or more in
+both looks. The native UI kit's own `--un-*` variables are mapped onto the
+tokens (both looks) in the same file.
 
 ## App-specific conventions
 
 - All four tables (`children`, `languages`, `entries`, `demo_seeds`) are
   `staging:private` and per owner: every query is scoped to
   `owner_id = String(req.user.id)`; there are no public tables.
+- The birthday is asked as **month and year only** (the creator's ask):
+  `PUT /api/child` takes `birth_month` (`YYYY-MM`) and stores it as that
+  month's first day, so every age counts whole calendar months from the
+  month itself. Firsts keep full dates.
 - Dates are Postgres `date` columns and travel as `YYYY-MM-DD` strings
   everywhere (cast to text in SELECTs so node-pg never shifts the day); a
   date is what the parent entered in their own calendar, and the server
-  allows up to one day past its UTC "today" as slack.
+  allows up to one day past its UTC "today" as slack (one month of slack
+  for a birth month).
 - Ages count **whole months** between the birthday and a date
   (`(y2−y1)*12 + (m2−m1) − (d2<d1 ? 1 : 0)`), formatted "Under 1 month",
   "N months", "1 year", "1 year 3 months"…

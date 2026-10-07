@@ -55,18 +55,22 @@ module.exports = {
         danger: token('danger'),
         'on-danger': token('on-danger'),
         focus: token('focus'), // the keyboard focus ring
-        word: token('word'), // words: brick red block
+        sun: token('sun'), // the brand yellow: a chosen chip
+        'on-sun': token('on-sun'),
+        word: token('word'), // words: terracotta block
         'word-soft': token('word-soft'),
-        sound: token('sound'), // animal sounds: meadow green block
+        sound: token('sound'), // animal sounds: moss green block
         'sound-soft': token('sound-soft'),
-        sign: token('sign'), // signs: block blue
+        sign: token('sign'), // signs: slate blue block
         'sign-soft': token('sign-soft'),
       },
-      // Two system faces with a role each: rounded for the headings and the
-      // alphabet blocks, serif italic for how a first sounds. Body text
-      // stays in Tailwind's default sans stack.
+      // Two faces with a role each, matching the brand look: Figtree for
+      // the headings and the blocks, Inter for body text, serif italic for
+      // how a first sounds. Both variable fonts are self-hosted in
+      // public/fonts (see @font-face in styles/tailwind-input.css).
       fontFamily: {
-        rounded: ['ui-rounded', '"SF Pro Rounded"', '"Nunito"', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        rounded: ['Figtree', 'Inter', 'system-ui', 'sans-serif'],
         serif: ['ui-serif', 'Georgia', '"Times New Roman"', 'serif'],
       },
       // The type scale: four sizes, and nothing in between.
