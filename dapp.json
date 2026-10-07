@@ -1,4 +1,25 @@
 {
   "description": "Track your child's first words, animal sounds, and sign language across multiple languages",
-  "secrets": []
+  "secrets": [],
+  "tests": [
+    {
+      "name": "Rilo renders on / (setup or the firsts list)",
+      "path": "/",
+      "expectSelector": "[data-screen='setup'], [data-screen='app']"
+    },
+    {
+      "id": "firsts.demo",
+      "name": "Populated demo (light)",
+      "path": "/?demo=1&un-theme=light",
+      "expectSelector": ".first-row",
+      "expectText": "Staging demo",
+      "visual": true,
+      "impact": ["public/**", "styles/**", "tailwind.config.js", "server.js"]
+    },
+    {
+      "name": "Populated demo (dark)",
+      "path": "/?demo=1&un-theme=dark",
+      "expectSelector": "html.dark .first-row"
+    }
+  ]
 }

@@ -13,46 +13,74 @@
 @tailwind utilities;
 
 /* ── Colour tokens ────────────────────────────────────────────────────────
- * This app's palette, defined once. Each value is "R G B"; tailwind.config.js
- * names them (bg-ground, bg-surface, text-fg, text-muted, border-line,
- * bg-accent with text-on-accent, ...). :root is the light look, and .dark,
- * which the theme script in public/index.html sets on <html>, the dark one.
+ * Rilo's palette, from the subject: firsts are coloured like wooden
+ * alphabet blocks (brick red words, meadow green sounds, block blue signs)
+ * sitting on warm paper neutrals. The action colour is plain ink, so the
+ * blocks carry the colour on the screen. Each value is "R G B";
+ * tailwind.config.js names them. :root is the light look, and .dark, which
+ * the theme script in public/index.html sets on <html>, the dark one.
  *
- * Re-theme the app HERE: change the values, keep the names. The defaults
- * (warm greys, one teal accent) are a quiet starting point, not a look.
- * Keep every text pair at 4.5:1 or more in both looks: fg and muted on
- * ground, surface and raised; accent and danger on ground and surface;
- * on-accent on accent; on-danger on danger.
+ * Re-theme the app HERE: change the values, keep the names. Keep every text
+ * pair at 4.5:1 or more in both looks: fg and muted on ground, surface and
+ * raised; on-accent on accent; each kind colour on its soft colour and on
+ * surface; danger on ground and surface.
  *
- * Adopting the native UI kit later? Point its --un-accent and
- * --un-accent-contrast at the accent and on-accent tokens.
+ * The kit's variables for the native UI kit point at these tokens (both
+ * looks, since a var() inside a custom property is substituted where it is
+ * declared).
  */
 @layer base {
   :root {
-    --ground: 250 250 249;    /* the page */
-    --surface: 255 255 255;   /* lists, cards, fields */
-    --raised: 245 245 244;    /* hovers, badges */
-    --fg: 28 25 23;           /* text */
-    --muted: 87 83 78;        /* secondary text */
-    --line: 231 229 228;      /* borders, dividers, skeletons */
-    --accent: 15 118 110;     /* the one accent */
-    --on-accent: 255 255 255; /* text on the accent */
+    --ground: 250 247 242;    /* the paper page */
+    --surface: 255 255 255;   /* lists, sheet, fields */
+    --raised: 243 239 232;    /* switch track, tags */
+    --fg: 33 30 27;           /* text */
+    --muted: 99 92 84;        /* secondary text */
+    --line: 228 222 213;      /* borders, dividers, skeletons */
+    --accent: 33 30 27;       /* ink: Add a first, chosen language */
+    --on-accent: 250 247 242; /* text on the accent */
+    --word: 178 52 40;        /* words: brick red block */
+    --word-soft: 251 230 225;
+    --sound: 46 112 58;       /* animal sounds: meadow green block */
+    --sound-soft: 224 240 222;
+    --sign: 38 86 160;        /* signs: block blue */
+    --sign-soft: 223 233 248;
     --danger: 185 28 28;
     --on-danger: 255 255 255;
-    --focus: 13 148 136;      /* the keyboard focus ring */
+    --focus: 38 86 160;      /* the keyboard focus ring */
+
+    --un-accent: rgb(var(--accent));
+    --un-accent-contrast: rgb(var(--on-accent));
+    --un-sheet-bg: rgb(var(--surface));
+    --un-hairline: rgb(var(--line));
+    --un-muted: rgb(var(--muted));
+    --un-action-danger: rgb(var(--danger));
   }
   .dark {
-    --ground: 12 10 9;
-    --surface: 28 25 23;
-    --raised: 41 37 36;
-    --fg: 245 245 244;
-    --muted: 168 162 158;
-    --line: 68 64 60;
-    --accent: 45 212 191;
-    --on-accent: 4 47 46;
+    --ground: 22 20 18;
+    --surface: 33 30 27;
+    --raised: 45 41 37;
+    --fg: 245 241 234;
+    --muted: 176 168 158;
+    --line: 64 59 53;
+    --accent: 245 241 234;
+    --on-accent: 22 20 18;
+    --word: 245 140 120;
+    --word-soft: 74 34 28;
+    --sound: 132 200 140;
+    --sound-soft: 30 58 34;
+    --sign: 140 178 240;
+    --sign-soft: 30 44 74;
     --danger: 248 113 113;
     --on-danger: 69 10 10;
-    --focus: 94 234 212;
+    --focus: 140 178 240;
+
+    --un-accent: rgb(var(--accent));
+    --un-accent-contrast: rgb(var(--on-accent));
+    --un-sheet-bg: rgb(var(--surface));
+    --un-hairline: rgb(var(--line));
+    --un-muted: rgb(var(--muted));
+    --un-action-danger: rgb(var(--danger));
   }
   /* el.hidden = true hides an element even when a class gives it a display
      (flex, the components below). */
@@ -62,10 +90,11 @@
 }
 
 /* ── Components ───────────────────────────────────────────────────────────
- * A small starting kit on the tokens. Use these rather than restyling the
- * same thing by hand, add to them sparingly, and change a component here
- * rather than one copy of it. Type: text-title, text-heading, text-body and
- * text-small (tailwind.config.js), nothing in between.
+ * A small kit on the tokens. Use these rather than restyling the same thing
+ * by hand, add to them sparingly, and change a component here rather than
+ * one copy of it. Type: text-title, text-heading, text-body and text-small
+ * (tailwind.config.js), nothing in between; headings in the rounded face
+ * (font-rounded), how a first sounds in the italic serif (.says).
  */
 @layer components {
   /* Buttons: one primary per screen, the rest secondary. At least 44 px
@@ -85,7 +114,7 @@
 
   /* Text inputs, selects and textareas: <input class="field">, 44 px tall.
      The placeholder is a faint hint (muted at 60%), so an example such as
-     "5.0" never reads as a value somebody already typed in. */
+     "e.g. ball" never reads as a value somebody already typed in. */
   .field {
     @apply block min-h-11 w-full rounded-lg border border-line bg-surface px-3 py-2 text-body text-fg
       placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-focus;
@@ -98,6 +127,83 @@
   }
   .list-row {
     @apply flex min-h-11 items-center gap-3 px-4 py-3;
+  }
+  /* A row that is itself a button (tapping a first opens it for editing):
+     the .list-row li carries p-0, this button the padding. */
+  .row-btn {
+    @apply flex w-full items-center gap-3 px-4 py-3 text-left text-fg
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus;
+  }
+
+  /* The kind switch: a raised track of N equal parts, the chosen part a
+     surface pill. <div class="seg" role="tablist"> of buttons, the chosen
+     one with class "on". */
+  .seg {
+    @apply grid grid-cols-4 gap-1 rounded-xl bg-raised p-1;
+  }
+  .seg > button {
+    @apply flex min-h-11 flex-col items-center justify-center rounded-lg px-1 text-small text-muted
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .seg > button b {
+    @apply flex items-center gap-1.5 font-medium;
+  }
+  .seg > button.on {
+    @apply bg-surface text-fg shadow-sm;
+  }
+  .seg > button.on b {
+    @apply font-semibold;
+  }
+
+  /* The pinned bar holding the screen's primary action; the button lives in
+     an inner div so the kit's .un-safe-bottom and the bar's own padding
+     compose. */
+  .bar {
+    @apply fixed inset-x-0 bottom-0 z-30 border-t border-line bg-ground/95;
+  }
+
+  /* The alphabet block, Rilo's signature element: a 40 px wooden toy block
+     with the first's initial, on its kind's soft colour with a thicker
+     bottom edge in the kind's colour. <span class="blk blk-word">A</span>.
+     Always aria-hidden; the row's button carries the name. */
+  .blk {
+    @apply flex h-10 w-10 flex-none items-center justify-center rounded-lg text-heading font-bold;
+    border-bottom-width: 3px;
+  }
+  .blk-word {
+    background: rgb(var(--word-soft));
+    color: rgb(var(--word));
+    border-color: rgb(var(--word) / 0.5);
+  }
+  .blk-sound {
+    background: rgb(var(--sound-soft));
+    color: rgb(var(--sound));
+    border-color: rgb(var(--sound) / 0.5);
+  }
+  .blk-sign {
+    background: rgb(var(--sign-soft));
+    color: rgb(var(--sign));
+    border-color: rgb(var(--sign) / 0.5);
+  }
+
+  /* Tap-to-pick language chips: <button class="chip">Spanish</button>, the
+     chosen one with "chip-on". */
+  .chip {
+    @apply inline-flex min-h-11 items-center gap-1 rounded-full border border-line bg-surface px-3.5 text-small text-fg
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .chip-on {
+    @apply border-accent bg-accent font-semibold text-on-accent;
+  }
+
+  /* How the child says it, written like a parent's note in a baby book. */
+  .says {
+    @apply font-serif italic text-fg;
+  }
+
+  /* A small pill beside a heading ("Staging demo"). */
+  .tag {
+    @apply inline-flex items-center rounded-full border border-line bg-raised px-2 text-small text-muted;
   }
 
   /* A card: one self-contained thing, usually something you tap. Most

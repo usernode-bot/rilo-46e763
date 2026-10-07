@@ -97,32 +97,38 @@ tables you've marked private), etc.
 
 ## About Rilo
 
-Track your child's first words, animal sounds, and sign language across multiple languages
-
-_(add a sentence or two more of product context here so Claude Code has a
-shared understanding of what this app is for)_
+A baby book for one child's firsts: first words in any language, first
+animal sounds, and first signs. Each entry keeps the word (or animal, or
+sign), how the child says it, an optional language of the parent's own
+choosing, and the date — and every entry shows how old the child was,
+because the whole point is watching the timeline grow. One screen, one
+primary action ("Add a first"); everything browses newest first grouped
+by age. More than one child, audio recordings of pronunciation, and
+renaming languages are later scope, not current.
 
 ## Design
 
 This app's look. The first real version fills in the blanks; every later
 change follows it, and updates it when a request changes the look on purpose.
 
-- **Palette:** _(name the accent, any second colour and the neutrals, e.g.
-  "accent: tomato red; second: basil green; neutrals: warm greys")_
-- **Signature element:** _(the one thing on screen drawn from this app's
-  subject, which no other app would have)_
+- **Palette:** warm paper neutrals (ground `250 247 242` / dark `22 20 18`,
+  with surface, raised, fg, muted, line tokens to match), a plain **ink**
+  action colour (accent = fg), and three alphabet-block colours, one per
+  kind of first: **brick red** for words (`word`/`word-soft` = `178 52 40`
+  on `251 230 225`), **meadow green** for animal sounds (`sound`/`sound-soft`
+  = `46 112 58` on `224 240 222`), and **block blue** for signs
+  (`sign`/`sign-soft` = `38 86 160` on `223 233 248`). Dark values are in
+  the token file; every text pair is at 4.5:1 in both looks.
+- **Signature element:** the **alphabet block** — every first starts with a
+  40 px rounded square showing its initial in the rounded face, on its
+  kind's soft colour with a thicker bottom edge in the kind's colour, so it
+  reads as a wooden toy block. The same three colours appear as small
+  squares in the All/Words/Sounds/Signs switch.
 - **Type scale:** `text-title`, `text-heading`, `text-body`, `text-small`
-  _(change their sizes in `tailwind.config.js` if you must, not their number)_
-- **One fixed look:** _(only for an app drawn as its own scene, such as a
-  game: which look, and why. Otherwise delete this line.)_
-
-The kit is in `styles/tailwind-input.css`: colour tokens with a light and
-a dark value (named in `tailwind.config.js`), and a few components
-(`btn-primary`, `btn-secondary`, `field`, `list` and `list-row`,
-`card`, `section-label`, `skeleton`, `state-empty`, `state-error`).
-Re-theme by changing the token values there, keeping every text pair at
-4.5:1 or more in both looks.
-
+  (unchanged in `tailwind.config.js`). Headings and the blocks use
+  `font-rounded` (ui-rounded, friendly without being babyish); how a child
+  says a word is `.says`, an italic serif inside curly quotes, like a
+  handwritten note in a baby book; everything else is the system sans.
 - Colour comes only from the tokens (`bg-ground`, `bg-surface`,
   `text-fg`, `text-muted`, `border-line`, `bg-accent` with
   `text-on-accent`, ...): never a raw hex value or a stock palette class.
@@ -137,8 +143,35 @@ Re-theme by changing the token values there, keeping every text pair at
   ("Staging mock data" in the platform conventions).
 - No cards in cards, no uppercase eyebrows, no emoji as icons.
 
+The kit is in `styles/tailwind-input.css`: colour tokens with a light and
+a dark value (named in `tailwind.config.js`), and components (`btn-primary`,
+`btn-secondary`, `field`, `list` and `list-row`, `row-btn`, `seg`, `blk`,
+`chip`, `says`, `tag`, `bar`, `card`, `section-label`, `skeleton`,
+`state-empty`, `state-error`). Re-theme by changing the token values there,
+keeping every text pair at 4.5:1 or more in both looks. The native UI kit's
+own `--un-*` variables are mapped onto the tokens (both looks) in the same
+file.
+
 ## App-specific conventions
 
-_(optional — e.g. "all currency values stored as integer cents, not
-floats"; "the `posts` table is append-only"; "avoid adding new
-dependencies"; etc.)_
+- All four tables (`children`, `languages`, `entries`, `demo_seeds`) are
+  `staging:private` and per owner: every query is scoped to
+  `owner_id = String(req.user.id)`; there are no public tables.
+- Dates are Postgres `date` columns and travel as `YYYY-MM-DD` strings
+  everywhere (cast to text in SELECTs so node-pg never shifts the day); a
+  date is what the parent entered in their own calendar, and the server
+  allows up to one day past its UTC "today" as slack.
+- Ages count **whole months** between the birthday and a date
+  (`(y2−y1)*12 + (m2−m1) − (d2<d1 ? 1 : 0)`), formatted "Under 1 month",
+  "N months", "1 year", "1 year 3 months"…
+- `is_demo` (and the `demo_seeds` marker) is display-only: no logic reads
+  it. The populated demo exists only on staging with `?demo=1`, written
+  once per viewing account by `seedDemoFor()`; a viewer's own child is
+  kept, a real save of name/birthday clears `is_demo`, and an account
+  that already has entries of its own is never seeded at all.
+- One capture identity runs all of dapp.json's checks, so never declare a
+  check whose expectation depends on the account being empty — route the
+  assertion through `?demo=1` or accept both final screens (see the `/`
+  check's selector).
+- Avoid adding new dependencies; the app is Express + pg + precompiled
+  Tailwind.

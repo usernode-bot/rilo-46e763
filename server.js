@@ -147,6 +147,415 @@ app.use((req, res, next) => {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+/* ── Rilo's API ───────────────────────────────────────────────────────────
+ * One page, one state endpoint, four private per-owner tables. Every route
+ * below is scoped to `owner_id = String(req.user.id)`: firsts are family
+ * data and visible only to the person who logged them (the tables are
+ * marked `staging:private` in ensureSchema()).
+ */
+
+// Dates travel as plain `YYYY-MM-DD` strings everywhere: Postgres `date`
+// columns are cast to text in SELECTs so node-pg never turns them into a
+// Date in some zone, and validation round-trips through UTC.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function validDate(value) {
+  if (typeof value !== 'string' || !DATE_RE.test(value)) return null;
+  const d = new Date(value + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10) === value ? value : null;
+}
+function serverToday(now) {
+  return now.toISOString().slice(0, 10);
+}
+function addDays(iso, n) {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+// "Today" with a day of slack, so a parent whose clock is ahead of the
+// server's UTC day is not told their today is in the future.
+function latestAllowedDay(now) {
+  return addDays(serverToday(now), 1);
+}
+
+// One async handler wrapper so a rejected query answers 500 instead of
+// hanging the request.
+const wrap = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
+
+// The row shape /api/state, /api/entries (POST) and PATCH /api/entries/:id
+// all return to the page.
+const ENTRY_SELECT = `
+  SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id,
+         e.said_on::text AS said_on, e.note, e.is_demo,
+         l.name AS language_name
+  FROM entries e LEFT JOIN languages l ON l.id = e.language_id
+  WHERE e.id = $1 AND e.owner_id = $2`;
+
+app.get('/api/state', wrap(async (req, res) => {
+  if (!req.user) {
+    // A guest looks around: they see the setup screen, never someone's child.
+    return res.json({ child: null, languages: [], entries: [] });
+  }
+  const ownerId = String(req.user.id);
+  // The populated first-version demo, on staging and ?demo=1 only.
+  if (IS_STAGING && req.query.demo === '1') {
+    try {
+      await seedDemoFor(ownerId, req.now);
+    } catch (err) {
+      console.warn('demo seed failed: ' + err.message);
+    }
+  }
+  const child = await pool.query(
+    'SELECT name, birthday::text AS birthday, is_demo FROM children WHERE owner_id = $1',
+    [ownerId]);
+  const languages = await pool.query(
+    `SELECT l.id, l.name, l.is_demo,
+            (SELECT count(*) FROM entries e
+             WHERE e.language_id = l.id AND e.owner_id = $1)::int AS uses
+     FROM languages l WHERE l.owner_id = $1
+     ORDER BY lower(l.name)`,
+    [ownerId]);
+  const entries = await pool.query(
+    `SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id,
+            e.said_on::text AS said_on, e.note, e.is_demo,
+            l.name AS language_name
+     FROM entries e LEFT JOIN languages l ON l.id = e.language_id
+     WHERE e.owner_id = $1
+     ORDER BY e.said_on DESC, e.id DESC`,
+    [ownerId]);
+  res.json({
+    child: child.rows[0] || null,
+    languages: languages.rows,
+    entries: entries.rows,
+  });
+}));
+
+app.put('/api/child', wrap(async (req, res) => {
+  const ownerId = String(req.user.id);
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+  if (name.length < 1 || name.length > 40) {
+    return res.status(400).json({ error: 'Add a name between 1 and 40 characters.' });
+  }
+  const birthday = validDate(req.body.birthday);
+  if (!birthday) {
+    return res.status(400).json({ error: 'Pick a birthday.' });
+  }
+  if (birthday < '1990-01-01' || birthday > latestAllowedDay(req.now)) {
+    return res.status(400).json({ error: 'Pick a birthday between 1990 and today.' });
+  }
+  const saved = await pool.query(
+    `INSERT INTO children (owner_id, name, birthday)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (owner_id) DO UPDATE
+       SET name = $2, birthday = $3, is_demo = false, updated_at = NOW()
+     RETURNING name, birthday::text AS birthday, is_demo`,
+    [ownerId, name, birthday]);
+  res.json(saved.rows[0]);
+}));
+
+app.post('/api/languages', wrap(async (req, res) => {
+  const ownerId = String(req.user.id);
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+  if (name.length < 1 || name.length > 30) {
+    return res.status(400).json({ error: 'Type a language name between 1 and 30 characters.' });
+  }
+  const existing = await pool.query(
+    'SELECT id, name FROM languages WHERE owner_id = $1 AND lower(name) = lower($2)',
+    [ownerId, name]);
+  if (existing.rows.length) return res.json(existing.rows[0]);
+  const inserted = await pool.query(
+    `INSERT INTO languages (owner_id, name) VALUES ($1, $2)
+     ON CONFLICT (owner_id, lower(name)) DO NOTHING
+     RETURNING id, name`,
+    [ownerId, name]);
+  if (inserted.rows.length) return res.json(inserted.rows[0]);
+  // Lost a race with an identical insert: read the winner.
+  const winner = await pool.query(
+    'SELECT id, name FROM languages WHERE owner_id = $1 AND lower(name) = lower($2)',
+    [ownerId, name]);
+  return res.json(winner.rows[0]);
+}));
+
+// Validates the fields an add and an edit share, against the child row the
+// dates are measured from. Returns { error } (already answered) or the values.
+async function validateEntry(req, res, ownerId) {
+  const kind = req.body.kind;
+  if (kind !== 'word' && kind !== 'sound' && kind !== 'sign') {
+    res.status(400).json({ error: 'Choose Word, Animal sound or Sign.' });
+    return null;
+  }
+  const label = typeof req.body.label === 'string' ? req.body.label.trim() : '';
+  if (label.length < 1 || label.length > 60) {
+    res.status(400).json({ error: 'Write the ' + (kind === 'word' ? 'word' : kind === 'sound' ? 'animal' : 'sign') + '.' });
+    return null;
+  }
+  const sounds_like = typeof req.body.sounds_like === 'string' ? req.body.sounds_like.trim() : '';
+  if (sounds_like.length > 80) {
+    res.status(400).json({ error: 'Keep how it sounds under 80 characters.' });
+    return null;
+  }
+  const note = typeof req.body.note === 'string' ? req.body.note.trim() : '';
+  if (note.length > 280) {
+    res.status(400).json({ error: 'Keep the note under 280 characters.' });
+    return null;
+  }
+  const said_on = validDate(req.body.said_on);
+  if (!said_on) {
+    res.status(400).json({ error: 'Pick a date.' });
+    return null;
+  }
+  const child = await pool.query(
+    'SELECT birthday::text AS birthday FROM children WHERE owner_id = $1',
+    [ownerId]);
+  if (!child.rows.length) {
+    res.status(400).json({ error: "Add your child's name and birthday first." });
+    return null;
+  }
+  if (said_on < child.rows[0].birthday) {
+    res.status(400).json({ error: 'Pick a date on or after the birthday.' });
+    return null;
+  }
+  if (said_on > latestAllowedDay(req.now)) {
+    res.status(400).json({ error: 'Pick a date no later than today.' });
+    return null;
+  }
+  let language_id = null;
+  if (req.body.language_id != null) {
+    language_id = Number(req.body.language_id);
+    if (!Number.isInteger(language_id)) {
+      res.status(400).json({ error: 'Choose one of your languages.' });
+      return null;
+    }
+    const owned = await pool.query(
+      'SELECT 1 FROM languages WHERE id = $1 AND owner_id = $2',
+      [language_id, ownerId]);
+    if (!owned.rows.length) {
+      res.status(400).json({ error: 'Choose one of your languages.' });
+      return null;
+    }
+  }
+  return {
+    kind, label,
+    sounds_like: sounds_like || null,
+    note: note || null,
+    language_id,
+    said_on,
+  };
+}
+
+app.post('/api/entries', wrap(async (req, res) => {
+  const ownerId = String(req.user.id);
+  const values = await validateEntry(req, res, ownerId);
+  if (!values) return;
+  const inserted = await pool.query(
+    `INSERT INTO entries (owner_id, kind, label, sounds_like, language_id, said_on, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id`,
+    [ownerId, values.kind, values.label, values.sounds_like, values.language_id,
+     values.said_on, values.note]);
+  const row = await pool.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
+  res.status(201).json(row.rows[0]);
+}));
+
+app.patch('/api/entries/:id', wrap(async (req, res) => {
+  const ownerId = String(req.user.id);
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(404).json({ error: 'First not found.' });
+  const owned = await pool.query(
+    'SELECT 1 FROM entries WHERE id = $1 AND owner_id = $2', [id, ownerId]);
+  if (!owned.rows.length) return res.status(404).json({ error: 'First not found.' });
+  const values = await validateEntry(req, res, ownerId);
+  if (!values) return;
+  await pool.query(
+    `UPDATE entries
+     SET kind = $1, label = $2, sounds_like = $3, language_id = $4,
+         said_on = $5, note = $6, updated_at = NOW()
+     WHERE id = $7 AND owner_id = $8`,
+    [values.kind, values.label, values.sounds_like, values.language_id,
+     values.said_on, values.note, id, ownerId]);
+  const row = await pool.query(ENTRY_SELECT, [id, ownerId]);
+  res.json(row.rows[0]);
+}));
+
+app.delete('/api/entries/:id', wrap(async (req, res) => {
+  const ownerId = String(req.user.id);
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(404).json({ error: 'First not found.' });
+  const deleted = await pool.query(
+    'DELETE FROM entries WHERE id = $1 AND owner_id = $2', [id, ownerId]);
+  if (!deleted.rowCount) return res.status(404).json({ error: 'First not found.' });
+  res.status(204).end();
+}));
+
+/* ── Schema and demo seed ──────────────────────────────────────────────── */
+
+async function ensureSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS children (
+      owner_id text PRIMARY KEY,
+      name text NOT NULL,
+      birthday date NOT NULL,
+      is_demo boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT NOW(),
+      updated_at timestamptz NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS languages (
+      id serial PRIMARY KEY,
+      owner_id text NOT NULL,
+      name text NOT NULL,
+      is_demo boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS languages_owner_name
+      ON languages (owner_id, lower(name));
+    CREATE TABLE IF NOT EXISTS entries (
+      id serial PRIMARY KEY,
+      owner_id text NOT NULL,
+      kind text NOT NULL CHECK (kind IN ('word','sound','sign')),
+      label text NOT NULL,
+      sounds_like text,
+      language_id int REFERENCES languages(id) ON DELETE SET NULL,
+      said_on date NOT NULL,
+      note text,
+      is_demo boolean NOT NULL DEFAULT false,
+      demo_key text,
+      created_at timestamptz NOT NULL DEFAULT NOW(),
+      updated_at timestamptz NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS entries_owner_said
+      ON entries (owner_id, said_on DESC, id DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS entries_owner_demo_key
+      ON entries (owner_id, demo_key);
+    CREATE TABLE IF NOT EXISTS demo_seeds (
+      owner_id text PRIMARY KEY,
+      seeded_at timestamptz NOT NULL DEFAULT NOW()
+    );
+  `);
+  // All four tables hold personal family data: private, and staged without
+  // their rows (see "Public vs private tables" in the platform conventions).
+  await pool.query(`COMMENT ON TABLE children IS 'staging:private'`);
+  await pool.query(`COMMENT ON TABLE languages IS 'staging:private'`);
+  await pool.query(`COMMENT ON TABLE entries IS 'staging:private'`);
+  await pool.query(`COMMENT ON TABLE demo_seeds IS 'staging:private'`);
+}
+
+// The 22 demo firsts: kind, label, how it sounds or is signed, language, the
+// age in months it happened at, and the day within that month. The date is
+// the seeded child's birthday plus the months plus the day, capped at today.
+const DEMO_ROWS = [
+  { kind: 'word',  label: 'agua',     sounds_like: 'awa',     language: 'Spanish', months: 19, day: 4 },
+  { kind: 'sound', label: 'duck',     sounds_like: 'kak kak', language: 'English', months: 19, day: 2 },
+  { kind: 'sign',  label: 'more',     sounds_like: 'Taps fingertips together', language: 'ASL', months: 19, day: 0 },
+  { kind: 'word',  label: 'shoes',    sounds_like: 'choo',    language: 'English', months: 18, day: 27 },
+  { kind: 'sound', label: 'cow',      sounds_like: 'mmmoo',   language: 'English', months: 18, day: 21 },
+  { kind: 'word',  label: 'gato',     sounds_like: 'tato',    language: 'Spanish', months: 18, day: 14 },
+  { kind: 'sign',  label: 'milk',     sounds_like: 'Squeezes a fist', language: 'ASL', months: 18, day: 7 },
+  { kind: 'word',  label: 'banana',   sounds_like: 'nana',    language: 'English', months: 17, day: 29 },
+  { kind: 'sign',  label: 'all done', sounds_like: 'Twists both hands', language: 'ASL', months: 17, day: 20 },
+  { kind: 'sound', label: 'dog',      sounds_like: 'wuh wuh', language: 'English', months: 17, day: 13 },
+  { kind: 'word',  label: 'pelota',   sounds_like: 'lota',    language: 'Spanish', months: 17, day: 5,
+    note: 'Staging demo: rolled the ball to Abuela' },
+  { kind: 'word',  label: 'up',       sounds_like: 'ap',      language: 'English', months: 16, day: 24 },
+  { kind: 'sound', label: 'sheep',    sounds_like: 'beee',    language: 'Spanish', months: 16, day: 15 },
+  { kind: 'word',  label: 'abuela',   sounds_like: 'bela',    language: 'Spanish', months: 16, day: 8 },
+  { kind: 'sign',  label: 'eat',      sounds_like: 'Taps fingers to mouth', language: 'ASL', months: 15, day: 22 },
+  { kind: 'word',  label: 'hola',     sounds_like: 'ola',     language: 'Spanish', months: 15, day: 19 },
+  { kind: 'sound', label: 'cat',      sounds_like: 'ow ow',   language: 'English', months: 15, day: 10 },
+  { kind: 'word',  label: 'ball',     sounds_like: 'ba',      language: 'English', months: 14, day: 23 },
+  { kind: 'sound', label: 'owl',      sounds_like: 'hoo hoo', language: 'English', months: 14, day: 16 },
+  { kind: 'word',  label: 'dada',     sounds_like: 'dada',    language: 'English', months: 13, day: 17 },
+  { kind: 'sign',  label: 'bye',      sounds_like: 'Opens and closes a hand', language: 'ASL', months: 12, day: 21 },
+  { kind: 'word',  label: 'mamá',     sounds_like: 'mama',    language: 'Spanish', months: 12, day: 9 },
+];
+
+// Populates the viewing account's own first-version demo, once per viewer,
+// on staging with ?demo=1 only (see "A first version's populated demo" in
+// the platform conventions). A viewer's own child, languages and entries
+// are kept: the ON CONFLICT clauses change nothing that is already there,
+// and demo_seeds marks that the seed was written so rows a viewer deleted
+// do not come back.
+async function seedDemoFor(ownerId, now) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const marker = await client.query(
+      'INSERT INTO demo_seeds (owner_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING owner_id',
+      [ownerId]);
+    if (!marker.rows.length) {
+      await client.query('COMMIT');
+      return;
+    }
+    // An owner with firsts of their own has moved past the demo: leave
+    // their list alone. Keep the marker so we do not retry every open.
+    const hasEntries = await client.query(
+      'SELECT 1 FROM entries WHERE owner_id = $1 LIMIT 1',
+      [ownerId]);
+    if (hasEntries.rows.length) {
+      await client.query('COMMIT');
+      return;
+    }
+    // Leo's birthday: the first day of the month 19 months before now, so
+    // today reads 1 year 7 months.
+    const todayIso = serverToday(now);
+    const demoBirthday = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 19, 1)
+    ).toISOString().slice(0, 10);
+    const child = await client.query(
+      `INSERT INTO children (owner_id, name, birthday, is_demo)
+       VALUES ($1, 'Leo', $2, true)
+       ON CONFLICT (owner_id) DO NOTHING
+       RETURNING birthday::text AS birthday`,
+      [ownerId, demoBirthday]);
+    let birthday;
+    if (child.rows.length) {
+      birthday = child.rows[0].birthday;
+    } else {
+      // The viewer already has a child: seed against theirs instead.
+      const existing = await client.query(
+        'SELECT birthday::text AS birthday FROM children WHERE owner_id = $1',
+        [ownerId]);
+      birthday = existing.rows[0].birthday;
+    }
+    const languageNames = ['English', 'Spanish', 'ASL'];
+    for (const name of languageNames) {
+      await client.query(
+        `INSERT INTO languages (owner_id, name, is_demo)
+         VALUES ($1, $2, true)
+         ON CONFLICT (owner_id, lower(name)) DO NOTHING`,
+        [ownerId, name]);
+    }
+    const langs = await client.query(
+      `SELECT id, lower(name) AS key FROM languages
+       WHERE owner_id = $1 AND lower(name) = ANY($2)`,
+      [ownerId, languageNames.map((n) => n.toLowerCase())]);
+    const langId = Object.fromEntries(langs.rows.map((r) => [r.key, r.id]));
+    let n = 0;
+    for (const row of DEMO_ROWS) {
+      n += 1;
+      const [by, bm, bd] = birthday.split('-').map(Number);
+      const at = new Date(Date.UTC(by, bm - 1 + row.months, bd + row.day));
+      const saidOn = at.toISOString().slice(0, 10) > todayIso
+        ? todayIso : at.toISOString().slice(0, 10);
+      await client.query(
+        `INSERT INTO entries
+           (owner_id, kind, label, sounds_like, language_id, said_on, note,
+            is_demo, demo_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8)
+         ON CONFLICT (owner_id, demo_key) DO NOTHING`,
+        [ownerId, row.kind, row.label, row.sounds_like,
+         langId[row.language.toLowerCase()] || null, saidOn, row.note || null,
+         'demo-' + String(n).padStart(2, '0')]);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // The template ships no favicon file; index.html carries an inline SVG
 // icon instead. Answer 204 here so anything that still probes
 // /favicon.ico (older browsers, direct visits) doesn't fall through to
@@ -191,10 +600,36 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Answers a failed handler with JSON instead of Express's HTML default.
+app.use((err, req, res, _next) => {
+  console.warn('request failed: ' + (err && err.message));
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'Something went wrong. Try again.' });
+});
+
+// The schema exists before the app takes traffic: routes query these tables
+// on the first request.
 async function start() {
+  await ensureSchema();
   const server = app.listen(port, () => console.log(`Listening on :${port}`));
   // Let Envoy retire idle upstream connections at 60s, with a 15s margin.
   server.keepAliveTimeout = 75_000;
+
+  // Stop accepting connections, drain, close the pool, exit (platform
+  // convention 9: the shutdown handler).
+  let stopping = false;
+  const shutdown = (signal) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`${signal}: shutting down`);
+    const finish = () => {
+      pool.end().then(() => process.exit(0)).catch(() => process.exit(0));
+    };
+    server.close(finish);
+    setTimeout(finish, 3000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 start().catch(err => { console.error(err); process.exit(1); });

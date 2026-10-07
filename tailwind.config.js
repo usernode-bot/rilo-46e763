@@ -55,6 +55,19 @@ module.exports = {
         danger: token('danger'),
         'on-danger': token('on-danger'),
         focus: token('focus'), // the keyboard focus ring
+        word: token('word'), // words: brick red block
+        'word-soft': token('word-soft'),
+        sound: token('sound'), // animal sounds: meadow green block
+        'sound-soft': token('sound-soft'),
+        sign: token('sign'), // signs: block blue
+        'sign-soft': token('sign-soft'),
+      },
+      // Two system faces with a role each: rounded for the headings and the
+      // alphabet blocks, serif italic for how a first sounds. Body text
+      // stays in Tailwind's default sans stack.
+      fontFamily: {
+        rounded: ['ui-rounded', '"SF Pro Rounded"', '"Nunito"', 'system-ui', 'sans-serif'],
+        serif: ['ui-serif', 'Georgia', '"Times New Roman"', 'serif'],
       },
       // The type scale: four sizes, and nothing in between.
       fontSize: {
