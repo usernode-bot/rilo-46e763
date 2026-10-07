@@ -128,18 +128,21 @@
       eg: 'e.g. ball',
       how: function (name) { return 'How ' + name + ' says it'; },
       verb: 'says', empty: 'No words yet.', add: 'Add a word',
+      unit: ['word', 'words'], icon: 'words',
     },
     sound: {
       one: 'Sound', many: 'Sounds', the: 'The animal or thing',
       eg: 'e.g. cow or car',
       how: function (name) { return 'The sound ' + name + ' makes'; },
       verb: 'makes', empty: 'No sounds yet.', add: 'Add a sound',
+      unit: ['sound', 'sounds'], icon: 'animals',
     },
     sign: {
       one: 'Sign', many: 'Signs', the: 'The sign',
       eg: 'e.g. more',
       how: function (name) { return 'How ' + name + ' signs it'; },
       verb: null, empty: 'No signs yet.', add: 'Add a sign',
+      unit: ['sign', 'signs'], icon: 'body',
     },
   };
 
@@ -304,7 +307,7 @@
     child: null,
     languages: [],
     entries: [],
-    tab: 'all',
+    tab: null, // null shows the kind cards; 'word' | 'sound' | 'sign' shows that kind's list
     sessionLangs: [], // languages created this session, still unused
     quickPick: {}, // quick-start picks: item id -> true
   };
@@ -412,11 +415,10 @@
 '  <div class="skeleton h-9 w-44"></div>' +
 '  <div class="skeleton mt-3 h-5 w-56"></div>' +
 '  <div class="skeleton mt-5 h-16 w-full rounded-xl"></div>' +
-'  <div class="skeleton mt-6 h-5 w-36"></div>' +
-'  <div class="mt-2 flex flex-col gap-2">' +
-'    <div class="skeleton h-16 w-full rounded-xl"></div>' +
-'    <div class="skeleton h-16 w-full rounded-xl"></div>' +
-'    <div class="skeleton h-16 w-full rounded-xl"></div>' +
+'  <div class="kind-grid mt-4">' +
+'    <div class="skeleton col-span-2 h-32 rounded-2xl"></div>' +
+'    <div class="skeleton h-32 rounded-2xl"></div>' +
+'    <div class="skeleton h-32 rounded-2xl"></div>' +
 '  </div>' +
 '</main>';
   }
@@ -524,35 +526,65 @@
         '<span>' + countLine + '</span></p>'
       : '') +
 '  </header>' +
-'  ' + segHtml() +
-'  <div id="firsts-area">' + listHtml() + '</div>' +
+'  ' + (state.tab
+      ? kindHeadHtml() + '<div id="firsts-area">' + listHtml() + '</div>'
+      : cardsHtml()) +
 '</main>' +
 '<div class="bar un-safe-bottom"><div class="mx-auto w-full max-w-md px-4 pb-4 pt-3">' +
 '  <button type="button" id="add-first" class="btn-primary w-full">' + ICON_PLUS + 'Add a first</button>' +
 '</div></div>';
   }
 
-  function segHtml() {
-    var tabs = [
-      { key: 'all', label: 'All', count: state.entries.length, dot: '' },
-      { key: 'word', label: 'Words', count: countKind('word'), dot: 'bg-word' },
-      { key: 'sound', label: 'Sounds', count: countKind('sound'), dot: 'bg-sound' },
-      { key: 'sign', label: 'Signs', count: countKind('sign'), dot: 'bg-sign' },
+  // The main screen's opening view: one card per kind of first — Words wide
+  // on top, Sounds and Signs side by side — with its count and its latest
+  // first. Tapping one opens that kind's list (the reference layout).
+  function cardsHtml() {
+    var cards = [
+      { key: 'word', wide: true },
+      { key: 'sound' },
+      { key: 'sign' },
     ];
-    return '<div class="seg mt-4" role="tablist" aria-label="Show">' + tabs.map(function (t) {
-      return '<button type="button" role="tab" aria-selected="' + (state.tab === t.key) +
-        '" data-tab="' + t.key + '" class="' + (state.tab === t.key ? 'on' : '') + '">' +
-        '<b class="flex items-center gap-1.5">' +
-        (t.dot ? '<i class="inline-block h-2 w-2 rounded-sm ' + t.dot + '" aria-hidden="true"></i>' : '') +
-        t.label + '</b><span>' + t.count + '</span></button>';
+    return '<div class="kind-grid mt-4">' + cards.map(function (c) {
+      var k = KINDS[c.key];
+      var latest = state.entries.find(function (e) { return e.kind === c.key; });
+      var blkClass = { word: 'blk-lg blk-word', sound: 'blk-lg blk-sound', sign: 'blk-lg blk-sign' }[c.key];
+      var sub = latest
+        ? 'Latest: ' + esc(latest.label) + ', ' + esc(fmtShort(latest.said_on))
+        : k.empty;
+      var aria = k.many + ', ' + countKind(c.key) +
+        (latest ? ', latest ' + latest.label + ', ' + fmtLong(latest.said_on) : ', none yet');
+      return '<button type="button" class="kind-card' + (c.wide ? ' col-span-2' : '') +
+        '" data-kind-card="' + c.key + '" aria-label="' + esc(aria) + '">' +
+'  <span class="flex items-start justify-between">' +
+'    <span class="blk ' + blkClass + '" aria-hidden="true">' + CATS[k.icon] + '</span>' +
+'    <span class="font-rounded text-title">' + countKind(c.key) + '</span>' +
+'  </span>' +
+'  <span class="block">' +
+'    <span class="block font-rounded text-heading">' + k.many + '</span>' +
+'    <span class="block text-small text-muted">' + sub + '</span>' +
+'  </span>' +
+'</button>';
     }).join('') + '</div>';
   }
 
+  // The heading above a kind's list: back to the cards, then the kind's name
+  // and count.
+  function kindHeadHtml() {
+    var k = KINDS[state.tab];
+    var n = countKind(state.tab);
+    return '' +
+'<button type="button" id="back-to-cards" class="btn-secondary mt-4">' +
+'  <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>' +
+'All firsts</button>' +
+'<div class="flex items-baseline justify-between px-1 pb-2 pt-6">' +
+'  <h2 class="font-rounded text-title">' + k.many + '</h2>' +
+'  <span class="text-small text-muted">' + n + ' ' + (n === 1 ? k.unit[0] : k.unit[1]) + '</span>' +
+'</div>';
+  }
+
   function listHtml() {
-    var rows = state.tab === 'all'
-      ? state.entries
-      : state.entries.filter(function (e) { return e.kind === state.tab; });
-    if (!rows.length) return emptyHtml(rows === state.entries);
+    var rows = state.entries.filter(function (e) { return e.kind === state.tab; });
+    if (!rows.length) return emptyHtml();
     var map = new Map();
     rows.forEach(function (e) {
       var age = ageMonths(state.child.birthday, e.said_on);
@@ -607,15 +639,9 @@
 '</li>';
   }
 
-  function emptyHtml(noFirstsAtAll) {
-    if (noFirstsAtAll) {
-      return '' +
-'<div class="state-empty mt-6">' +
-'  <p class="text-body font-medium">No firsts yet.</p>' +
-'  <p class="text-body text-muted">Add the first word, animal sound or sign ' + esc(state.child.name) + ' makes.</p>' +
-'  <button type="button" class="btn-primary mt-2" data-add>' + ICON_PLUS + 'Add a first</button>' +
-'</div>';
-    }
+  function emptyHtml() {
+    // The three cards at 0 stand in for the old "No firsts yet." state; this
+    // per-kind empty state only shows inside a kind's list.
     var k = KINDS[state.tab];
     return '' +
 '<div class="state-empty mt-6">' +
@@ -632,18 +658,27 @@
     var setupForm = app.querySelector('#setup-form');
     if (setupForm) setupForm.addEventListener('submit', onSetupSubmit);
 
-    app.querySelectorAll('[data-tab]').forEach(function (btn) {
+    app.querySelectorAll('[data-kind-card]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        state.tab = btn.getAttribute('data-tab');
+        state.tab = btn.getAttribute('data-kind-card');
         render();
+        window.scrollTo({ top: 0 });
+        var head = app.querySelector('#back-to-cards');
+        if (head) head.focus({ preventScroll: true });
       });
+    });
+
+    var backToCards = app.querySelector('#back-to-cards');
+    if (backToCards) backToCards.addEventListener('click', function () {
+      var kind = state.tab;
+      state.tab = null;
+      render();
+      var card = app.querySelector('[data-kind-card="' + kind + '"]');
+      if (card) card.focus({ preventScroll: true });
     });
 
     var addFirst = app.querySelector('#add-first');
     if (addFirst) addFirst.addEventListener('click', function () { openEntrySheet(null); });
-    app.querySelectorAll('[data-add]').forEach(function (btn) {
-      btn.addEventListener('click', function () { openEntrySheet(null); });
-    });
     app.querySelectorAll('[data-add-kind]').forEach(function (btn) {
       btn.addEventListener('click', function () { openEntrySheet(null, btn.getAttribute('data-add-kind')); });
     });
@@ -837,9 +872,9 @@
     var form = {
       kind: isEdit
         ? entry.kind
-        : (presetKind || (state.tab !== 'all' ? state.tab : 'word')),
+        : (presetKind || state.tab || 'word'),
       languageId: isEdit ? (entry.language_id || null) : defaultLanguageId(
-        presetKind || (state.tab !== 'all' ? state.tab : 'word')),
+        presetKind || state.tab || 'word'),
       // A first word is usually said partially at first, so "still
       // learning" is the default; the toggle marks it mastered when the
       // whole word is there (the creator's ask).

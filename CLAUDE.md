@@ -107,8 +107,9 @@ watching the timeline grow. Each entry also carries a **category**
 words — inferred from the label, not asked) and a **mastery** toggle
 ("Still learning" by default, because a first word is usually partial:
 "wa" for water). One screen, one primary action ("Add a first");
-everything browses newest first grouped by age, as separate tappable
-module cards. Setup asks the child's name and birth month (month and
+the screen opens on Words, Sounds and Signs cards, each opening its own
+list, newest first grouped by age, as separate tappable module cards.
+Setup asks the child's name and birth month (month and
 year, not a full birthday) once, then offers a quick start: tap the
 common words, sounds and signs the child already does, and they are
 saved dated the day the family started using Rilo. More than one child,
@@ -146,12 +147,14 @@ request changes the look on purpose.
   block. The icon set lives in `public/app.js` (`CATS`); the ten categories
   and their inference are under App-specific conventions. A mastered first
   wears a small sun badge with a check on the block's top-right corner.
-  The same three kind colours appear as small squares in the
-  All/Words/Sounds/Signs switch.
-- **Layout:** the timeline is a stack of separate rounded module cards
-  (`.list` / `.list-row`) — layered and tactile — not one connected
-  grouped list; each card is itself the tap target, so this does not
-  violate the no-cards-in-cards rule.
+  The same three kind colours appear on the main screen's kind cards
+  (Words, Sounds, Signs).
+- **Layout:** the main screen opens on three kind cards — Words wide on
+  top, Sounds and Signs side by side below (`.kind-grid` / `.kind-card`) —
+  each opening its own list; that list is a stack of separate rounded
+  module cards (`.list` / `.list-row`) — layered and tactile — not one
+  connected grouped list; each card is itself the tap target, so this does
+  not violate the no-cards-in-cards rule.
 - **Type:** Figtree for headings (`font-rounded`), Inter for body text,
   both self-hosted variable fonts in `public/fonts`; how a child
   says a word is `.says`, an italic serif inside curly quotes, like a
