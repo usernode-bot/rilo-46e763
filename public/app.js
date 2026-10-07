@@ -176,75 +176,83 @@
   // ── Categories and their illustrations ────────────────────────────────
   // Every first belongs to a category, and the block shows that category's
   // illustration instead of a letter (the creator's ask: animals get an
-  // icon, food, transportation…). Each illustration is a small hand-drawn
-  // line drawing in the kind's colour with one soft sun-yellow accent, in
-  // the brand style. Words are bucketed by `inferCategory` when saved; the
-  // server accepts only these keys.
+  // icon, food, transportation…). Each illustration is a hand-inked line
+  // drawing in the kind's colour — slightly wobbly shapes, small faces and
+  // detail strokes — with one sun-yellow patch outlined in the same line
+  // colour, after the reference illustrations. Words are bucketed by
+  // `inferCategory` when saved; the server accepts only these keys.
   function catSvg(inner) {
+    // Hand-inked line drawing in the kind's colour (via currentColor) with
+    // one ink-outlined sun-yellow patch: the patch element carries
+    // fill="rgb(var(--sun))" and no stroke="none", so it keeps the stroke.
     return '<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
   }
   var CATS = {
-    // Two of us: the small sun above is the little one.
+    // A grown-up's face and a baby's face, both smiling; the baby's yellow bonnet.
     people: catSvg(
-      '<circle cx="9" cy="7.5" r="3.2"/>' +
-      '<path d="M3.8 19.5c.6-3.2 2.6-4.9 5.2-4.9s4.6 1.7 5.2 4.9"/>' +
-      '<circle cx="16.8" cy="9.3" r="2.4"/>' +
-      '<path d="M16.2 14.6c2.3.3 3.9 1.9 4.4 4.2"/>' +
-      '<circle cx="19.5" cy="4.8" r="1.4" fill="rgb(var(--sun))" stroke="none"/>'),
-    // A friendly face with ears; the sun-yellow nose.
+      '<path d="M8.6 6.4c2.6-.1 4.5 2 4.4 4.6-.1 2.5-2 4.4-4.5 4.4S4 13.6 4.1 11c.1-2.6 1.9-4.5 4.5-4.6z"/>' +
+      '<path d="M7 10.4v.2M10.2 10.4v.2"/>' +
+      '<path d="M7.1 12.6c.8.8 2.1.8 3 0"/>' +
+      '<path d="M3.4 20.2c.7-2.4 2.6-3.6 5-3.6 1.2 0 2.3.3 3.1.9"/>' +
+      '<path d="M16.7 11.6c1.9 0 3.3 1.4 3.3 3.3s-1.5 3.3-3.4 3.2c-1.8 0-3.2-1.5-3.1-3.3.1-1.9 1.4-3.2 3.2-3.2z"/>' +
+      '<path d="M15.6 14.8v.1M17.9 14.8v.1"/>' +
+      '<path d="M15.8 16.4c.5.4 1.2.4 1.7 0"/>' +
+      '<path d="M13.4 13.3c.2-2.5 1.6-4 3.4-4s3.3 1.5 3.4 4c-1.1-.9-2.2-1.3-3.4-1.3s-2.3.4-3.4 1.3z" fill="rgb(var(--sun))"/>'),
+    // A little duck in profile, eye and smile; the sun-yellow beak.
     animals: catSvg(
-      '<circle cx="12" cy="13.4" r="6.1"/>' +
-      '<path d="M7.7 9 6.3 4.9l4 2.1"/>' +
-      '<path d="M16.3 9l1.4-4.1-4 2.1"/>' +
-      '<circle cx="9.8" cy="12.9" r=".55" fill="currentColor" stroke="none"/>' +
-      '<circle cx="14.2" cy="12.9" r=".55" fill="currentColor" stroke="none"/>' +
-      '<circle cx="12" cy="15.4" r="1" fill="rgb(var(--sun))" stroke="none"/>'),
-    // An apple; the sun-yellow leaf.
+      '<path d="M4.6 13.1c1.5.5 2.8.4 4.1-.2-.4-.7-.6-1.5-.5-2.4.2-2 1.9-3.5 3.9-3.4 2 .1 3.5 1.8 3.4 3.8 0 .7-.3 1.4-.7 2 1.5-.2 2.8-.8 3.8-1.9.6 3.9-2.4 7.4-6.6 7.5-3.6.1-6.6-2.2-7.4-5.4z"/>' +
+      '<path d="M13.1 9.9v.2"/>' +
+      '<path d="M10.4 15.5c1.4.9 3.1 1 4.6.2"/>' +
+      '<path d="M15.9 10.3l3-.4c-.3 1.1-1.2 1.7-2.5 1.7z" fill="rgb(var(--sun))"/>'),
+    // A baby bottle with teat and measure ticks; the sun-yellow collar.
     food: catSvg(
-      '<path d="M12 8.4C8.7 6.6 5 8.8 5 12.3c0 3.7 3.1 7.2 5.5 7.2.9 0 1-.5 1.5-.5s.6.5 1.5.5c2.4 0 5.5-3.5 5.5-7.2 0-3.5-3.7-5.7-7-3.9z"/>' +
-      '<path d="M12 8.4c0-1.6.8-2.7 2.2-3.3"/>' +
-      '<path d="M13.9 5.9c1.6-.8 3.2-.6 4.3.4-1.1 1-2.8 1.2-4.3.4z" fill="rgb(var(--sun))" stroke="none"/>'),
-    // A little car; sun-yellow wheel hubs.
+      '<path d="M10.6 6.6c0-1.3.4-2.9 1.4-3.3 1 .3 1.5 1.9 1.4 3.3"/>' +
+      '<path d="M9.6 8.8c-1.6 1.1-2.5 2.4-2.4 4.2l.1 5.6c0 1.2.8 1.9 2 1.9h5.5c1.2 0 2-.7 2-1.9l-.1-5.6c0-1.8-.7-3.1-2.3-4.2"/>' +
+      '<path d="M14.4 12.6h1.5M14.5 15.1h1.4"/>' +
+      '<path d="M9.4 6.6l5.2-.1.1 2.3-5.4.1z" fill="rgb(var(--sun))"/>'),
+    // A toy car with two wheels; the sun-yellow windows.
     transport: catSvg(
-      '<path d="M4 16.2v-2.9l1.8-4c.3-.8 1-1.2 1.9-1.2h6.6c.8 0 1.5.4 1.9 1.1l2.3 4.1v2.9"/>' +
-      '<path d="M4 13.3h16"/>' +
-      '<path d="M4 16.2h1.6M9.1 16.2h5.8M18.4 16.2H20"/>' +
-      '<circle cx="7.3" cy="16" r="1.7"/>' +
-      '<circle cx="16.7" cy="16" r="1.7"/>' +
-      '<circle cx="7.3" cy="16" r=".55" fill="rgb(var(--sun))" stroke="none"/>' +
-      '<circle cx="16.7" cy="16" r=".55" fill="rgb(var(--sun))" stroke="none"/>'),
-    // A beach ball; the sun-yellow centre.
+      '<path d="M3.9 16.2c-.2-1.5.2-2.6 1.5-3l1.8-.5 1.6-3.1c.4-.7 1-1.1 1.8-1.1h4.2c.8 0 1.4.3 1.9 1l2 2.9 1.5.4c1 .3 1.6 1.2 1.5 2.4"/>' +
+      '<path d="M5.6 16.4h.4M9.8 16.5h4.3M17.9 16.4h.3"/>' +
+      '<path d="M7.9 14.6c1 0 1.8.8 1.8 1.8s-.8 1.8-1.9 1.7c-1 0-1.7-.8-1.7-1.8s.8-1.7 1.8-1.7zM16 14.6c1 0 1.8.8 1.8 1.8s-.8 1.7-1.8 1.7-1.8-.8-1.8-1.8.8-1.7 1.8-1.7z"/>' +
+      '<path d="M9.3 12.1l1.1-2.3c.2-.4.5-.6 1-.6h2.9c.5 0 .8.2 1.1.6l1.3 2.3z" fill="rgb(var(--sun))"/>' +
+      '<path d="M12.6 9.3v2.8"/>'),
+    // A beach ball with a shine line; one stripe band in sun yellow.
     play: catSvg(
-      '<circle cx="12" cy="12" r="7"/>' +
-      '<path d="M5.6 9.2c4.2 2.3 8.6 2.3 12.8 0"/>' +
-      '<path d="M5.6 14.8c4.2-2.3 8.6-2.3 12.8 0"/>' +
-      '<circle cx="12" cy="12" r="1.2" fill="rgb(var(--sun))" stroke="none"/>'),
-    // A hand; the sun-yellow ring on the palm.
+      '<path d="M5.3 10c4.3 1.8 8.9 1.8 13.3-.1.4 1.3.5 2.8.2 4.2-4.4 1.6-9.1 1.6-13.6 0-.3-1.4-.3-2.8.1-4.1z" fill="rgb(var(--sun))"/>' +
+      '<path d="M12.2 4.9c3.9.1 6.9 3.3 6.8 7.2-.1 3.9-3.3 7-7.2 6.9-3.9-.1-6.9-3.2-6.8-7.1.1-4 3.2-7.1 7.2-7z"/>' +
+      '<path d="M8.7 7.5c.7-.6 1.5-1 2.4-1.2"/>'),
+    // A baby's foot with three small toes; the big toe in sun yellow.
     body: catSvg(
-      '<path d="M7.7 12.2V6.4a1.4 1.4 0 0 1 2.8 0v4.4"/>' +
-      '<path d="M10.5 10.8V5.2a1.4 1.4 0 0 1 2.8 0V11"/>' +
-      '<path d="M13.3 11V7.1a1.4 1.4 0 0 1 2.8 0v7.7c0 3.7-2.4 6.2-5.9 6.2-2.7 0-4.2-1.1-5.2-3l-1.3-2.5c-.5-.9-.2-2 .7-2.4.8-.4 1.7-.1 2.2.7l1.1 1.4"/>' +
-      '<circle cx="12.6" cy="14.6" r="1.1" fill="rgb(var(--sun))" stroke="none"/>'),
-    // Home: a house with the sun-yellow door.
+      '<path d="M9.4 20.6c-2.2-.1-3.5-1.9-3.4-4.3.1-2.3 1.4-3.8 1.4-6 0-1.8.9-3 2.4-3 2.5-.1 5 1.2 6 3.5.9 2.2.4 4.4-.6 6.4-1.2 2.4-3.2 3.5-5.8 3.4z"/>' +
+      '<path d="M8.7 4.9c.1-1.2 1-1.9 2-1.8s1.6 1 1.5 2.1c-.1 1.1-1 1.8-2 1.7s-1.6-1-1.5-2z" fill="rgb(var(--sun))"/>' +
+      '<path d="M14.1 5.1c.6 0 1 .4 1 1s-.5.9-1 .9-.9-.4-.9-.9.4-1 .9-1zM16.3 6.8c.5 0 .8.4.8.8s-.4.8-.8.8-.8-.4-.8-.8.3-.8.8-.8zM17.7 9.1c.4 0 .7.3.7.7s-.3.7-.7.7-.7-.3-.7-.7.3-.7.7-.7z"/>'),
+    // Home: a house with chimney and window; the sun-yellow door.
     home: catSvg(
-      '<path d="M4.5 11.2 12 4.8l7.5 6.4"/>' +
-      '<path d="M6.5 9.8v9.4h11V9.8"/>' +
-      '<path d="M10.6 19.2v-4.6h2.8v4.6z" fill="rgb(var(--sun))" stroke="none"/>'),
-    // Outside: a tree and the sun beside it.
+      '<path d="M4.4 11.5l7.6-6.7 7.7 6.6"/>' +
+      '<path d="M6.5 10.1l-.1 9.6 11.3-.1-.1-9.5"/>' +
+      '<path d="M15.6 7.7V5.2l1.8.1v3.8"/>' +
+      '<path d="M8.4 12.4l2.4-.1.1 2.3-2.5.1z"/>' +
+      '<path d="M13 19.6v-4.4c0-.6.4-1 1-1h.8c.6 0 1 .4 1 1v4.4z" fill="rgb(var(--sun))"/>'),
+    // Outside: a flower with petals, stem, leaf and ground line; the yellow centre.
     outside: catSvg(
-      '<circle cx="11" cy="9.8" r="5.2"/>' +
-      '<path d="M11 15v5M8.2 20h5.6"/>' +
-      '<circle cx="18.6" cy="5.4" r="1.7" fill="rgb(var(--sun))" stroke="none"/>'),
-    // Things we do and say: sparkles, the small one in sun yellow.
+      '<path d="M12 11.4c-.2 2.9.1 5.6.3 8.4"/>' +
+      '<path d="M12.2 17c1.2-1.9 2.9-2.6 4.6-2.2-.6 1.8-2.4 2.7-4.6 2.2z"/>' +
+      '<path d="M12 3.4c1.1 0 1.9.8 1.9 1.8M14.4 5.6c1.3-.5 2.5.3 2.5 1.6 0 1-.8 1.6-1.6 1.7M15.8 9.4c.7 1.1.3 2.4-.9 2.8-.9.3-1.7-.1-2.1-.8M11.6 11.5c-.6.9-1.8 1.1-2.7.4-.8-.6-.8-1.6-.3-2.4M8.2 8.8c-1.2-.3-1.8-1.4-1.3-2.5.4-.9 1.5-1.2 2.4-.9M9.6 5.1c.2-1 1.1-1.7 2.4-1.7"/>' +
+      '<path d="M12.1 6.8c.8 0 1.4.6 1.4 1.4s-.7 1.4-1.5 1.4-1.4-.6-1.4-1.4.7-1.4 1.5-1.4z" fill="rgb(var(--sun))"/>' +
+      '<path d="M8 20.2c2.7-.4 5.3-.4 8 0"/>'),
+    // Things we do: a waving hand with wave lines; the sun-yellow cuff.
     actions: catSvg(
-      '<path d="M11 4.5l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z"/>' +
-      '<path d="M17.9 14.7l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7z" fill="rgb(var(--sun))" stroke="none"/>'),
-    // Everything else: a speech bubble with sun-yellow dots.
+      '<path d="M7.4 11.9V6.3c0-.8.6-1.4 1.4-1.4.8 0 1.4.7 1.4 1.5v4.3"/>' +
+      '<path d="M10.2 10.6V5c0-.8.6-1.4 1.4-1.4.8 0 1.4.6 1.4 1.4v5.8"/>' +
+      '<path d="M13 10.8V6.9c0-.8.6-1.4 1.4-1.4.8 0 1.4.6 1.4 1.4v7.7c0 3.6-2.4 6-5.8 6-1.6 0-2.8-.4-3.7-1.1"/>' +
+      '<path d="M7.4 11.9l-.9-1c-.6-.6-1.6-.6-2.1.1-.4.6-.3 1.3.1 1.9l2.3 3.2"/>' +
+      '<path d="M5.4 17.6l1.9-1.8 2.2 2.4-1.9 1.8z" fill="rgb(var(--sun))"/>' +
+      '<path d="M18.4 4.6c.9.7 1.5 1.7 1.7 2.9M19.7 2.9c1.4 1 2.2 2.4 2.4 4"/>'),
+    // Everything else: a speech bubble; a sun-yellow heart inside.
     words: catSvg(
-      '<path d="M20 13.5a2.5 2.5 0 0 1-2.5 2.5H12l-4.6 4v-4h-.9A2.5 2.5 0 0 1 4 13.5v-7A2.5 2.5 0 0 1 6.5 4h11a2.5 2.5 0 0 1 2.5 2.5z"/>' +
-      '<circle cx="9" cy="10" r="1" fill="rgb(var(--sun))" stroke="none"/>' +
-      '<circle cx="12" cy="10" r="1" fill="rgb(var(--sun))" stroke="none"/>' +
-      '<circle cx="15" cy="10" r="1" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<path d="M6.6 4.1l10.9-.1c1.5 0 2.6 1.1 2.6 2.6l-.1 6.8c0 1.5-1.1 2.6-2.6 2.6h-5.3l-4.7 4.1.1-4.1h-.9C5.1 16 4 14.9 4 13.4l.1-6.7c0-1.5 1-2.6 2.5-2.6z"/>' +
+      '<path d="M12 13.2c-2-1.3-3.1-2.4-3.1-3.6 0-.9.7-1.6 1.5-1.6.7 0 1.2.4 1.6 1 .4-.6.9-1 1.6-1 .8 0 1.5.7 1.5 1.6 0 1.2-1.1 2.3-3.1 3.6z" fill="rgb(var(--sun))"/>'),
   };
   function catIcon(entry) {
     return CATS[entry.category] || CATS.words;
