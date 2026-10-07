@@ -227,6 +227,34 @@
     border-color: rgb(var(--sign) / 0.5);
   }
 
+  /* The kind cards the main screen opens on: bigger siblings of the blocks —
+     the kind's soft colour, a thicker bottom edge in the kind's colour, its
+     illustration, its count in big type, and its latest first. Each card is
+     one tap target that opens that kind's list.
+     <button class="kind-card kind-card-word">…</button>. The count and latest
+     line inherit the kind colour; the name carries text-fg. The tokens flip
+     for the dark look, so no dark: variant is needed. */
+  .kind-card {
+    @apply flex min-h-11 flex-col rounded-2xl border border-line p-4 text-left
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+    border-bottom-width: 3px;
+  }
+  .kind-card-word {
+    background: rgb(var(--word-soft));
+    color: rgb(var(--word));
+    border-bottom-color: rgb(var(--word));
+  }
+  .kind-card-sound {
+    background: rgb(var(--sound-soft));
+    color: rgb(var(--sound));
+    border-bottom-color: rgb(var(--sound));
+  }
+  .kind-card-sign {
+    background: rgb(var(--sign-soft));
+    color: rgb(var(--sign));
+    border-bottom-color: rgb(var(--sign));
+  }
+
   /* Tap-to-pick chips (languages, the quick-start picks): <button
      class="chip">Spanish</button>, the chosen one with "chip-on" in the
      brand yellow. */

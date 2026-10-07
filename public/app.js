@@ -22,6 +22,8 @@
     '<svg viewBox="0 0 24 24" class="h-5 w-5 flex-none" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
   var ICON_PENCIL =
     '<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
+  var ICON_BACK =
+    '<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>';
 
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -180,74 +182,83 @@
   // line drawing in the kind's colour with one soft sun-yellow accent, in
   // the brand style. Words are bucketed by `inferCategory` when saved; the
   // server accepts only these keys.
-  function catSvg(inner) {
-    return '<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
+  function catSvg(inner, cls) {
+    return '<svg viewBox="0 0 24 24" class="' + (cls || 'h-5 w-5') + '" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
   }
-  var CATS = {
+  var CAT_ART = {
     // Two of us: the small sun above is the little one.
-    people: catSvg(
+    people:
       '<circle cx="9" cy="7.5" r="3.2"/>' +
       '<path d="M3.8 19.5c.6-3.2 2.6-4.9 5.2-4.9s4.6 1.7 5.2 4.9"/>' +
       '<circle cx="16.8" cy="9.3" r="2.4"/>' +
       '<path d="M16.2 14.6c2.3.3 3.9 1.9 4.4 4.2"/>' +
-      '<circle cx="19.5" cy="4.8" r="1.4" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<circle cx="19.5" cy="4.8" r="1.4" fill="rgb(var(--sun))" stroke="none"/>',
     // A friendly face with ears; the sun-yellow nose.
-    animals: catSvg(
+    animals:
       '<circle cx="12" cy="13.4" r="6.1"/>' +
       '<path d="M7.7 9 6.3 4.9l4 2.1"/>' +
       '<path d="M16.3 9l1.4-4.1-4 2.1"/>' +
       '<circle cx="9.8" cy="12.9" r=".55" fill="currentColor" stroke="none"/>' +
       '<circle cx="14.2" cy="12.9" r=".55" fill="currentColor" stroke="none"/>' +
-      '<circle cx="12" cy="15.4" r="1" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<circle cx="12" cy="15.4" r="1" fill="rgb(var(--sun))" stroke="none"/>',
     // An apple; the sun-yellow leaf.
-    food: catSvg(
+    food:
       '<path d="M12 8.4C8.7 6.6 5 8.8 5 12.3c0 3.7 3.1 7.2 5.5 7.2.9 0 1-.5 1.5-.5s.6.5 1.5.5c2.4 0 5.5-3.5 5.5-7.2 0-3.5-3.7-5.7-7-3.9z"/>' +
       '<path d="M12 8.4c0-1.6.8-2.7 2.2-3.3"/>' +
-      '<path d="M13.9 5.9c1.6-.8 3.2-.6 4.3.4-1.1 1-2.8 1.2-4.3.4z" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<path d="M13.9 5.9c1.6-.8 3.2-.6 4.3.4-1.1 1-2.8 1.2-4.3.4z" fill="rgb(var(--sun))" stroke="none"/>',
     // A little car; sun-yellow wheel hubs.
-    transport: catSvg(
+    transport:
       '<path d="M4 16.2v-2.9l1.8-4c.3-.8 1-1.2 1.9-1.2h6.6c.8 0 1.5.4 1.9 1.1l2.3 4.1v2.9"/>' +
       '<path d="M4 13.3h16"/>' +
       '<path d="M4 16.2h1.6M9.1 16.2h5.8M18.4 16.2H20"/>' +
       '<circle cx="7.3" cy="16" r="1.7"/>' +
       '<circle cx="16.7" cy="16" r="1.7"/>' +
       '<circle cx="7.3" cy="16" r=".55" fill="rgb(var(--sun))" stroke="none"/>' +
-      '<circle cx="16.7" cy="16" r=".55" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<circle cx="16.7" cy="16" r=".55" fill="rgb(var(--sun))" stroke="none"/>',
     // A beach ball; the sun-yellow centre.
-    play: catSvg(
+    play:
       '<circle cx="12" cy="12" r="7"/>' +
       '<path d="M5.6 9.2c4.2 2.3 8.6 2.3 12.8 0"/>' +
       '<path d="M5.6 14.8c4.2-2.3 8.6-2.3 12.8 0"/>' +
-      '<circle cx="12" cy="12" r="1.2" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<circle cx="12" cy="12" r="1.2" fill="rgb(var(--sun))" stroke="none"/>',
     // A hand; the sun-yellow ring on the palm.
-    body: catSvg(
+    body:
       '<path d="M7.7 12.2V6.4a1.4 1.4 0 0 1 2.8 0v4.4"/>' +
       '<path d="M10.5 10.8V5.2a1.4 1.4 0 0 1 2.8 0V11"/>' +
       '<path d="M13.3 11V7.1a1.4 1.4 0 0 1 2.8 0v7.7c0 3.7-2.4 6.2-5.9 6.2-2.7 0-4.2-1.1-5.2-3l-1.3-2.5c-.5-.9-.2-2 .7-2.4.8-.4 1.7-.1 2.2.7l1.1 1.4"/>' +
-      '<circle cx="12.6" cy="14.6" r="1.1" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<circle cx="12.6" cy="14.6" r="1.1" fill="rgb(var(--sun))" stroke="none"/>',
     // Home: a house with the sun-yellow door.
-    home: catSvg(
+    home:
       '<path d="M4.5 11.2 12 4.8l7.5 6.4"/>' +
       '<path d="M6.5 9.8v9.4h11V9.8"/>' +
-      '<path d="M10.6 19.2v-4.6h2.8v4.6z" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<path d="M10.6 19.2v-4.6h2.8v4.6z" fill="rgb(var(--sun))" stroke="none"/>',
     // Outside: a tree and the sun beside it.
-    outside: catSvg(
+    outside:
       '<circle cx="11" cy="9.8" r="5.2"/>' +
       '<path d="M11 15v5M8.2 20h5.6"/>' +
-      '<circle cx="18.6" cy="5.4" r="1.7" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<circle cx="18.6" cy="5.4" r="1.7" fill="rgb(var(--sun))" stroke="none"/>',
     // Things we do and say: sparkles, the small one in sun yellow.
-    actions: catSvg(
+    actions:
       '<path d="M11 4.5l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z"/>' +
-      '<path d="M17.9 14.7l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7z" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<path d="M17.9 14.7l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7z" fill="rgb(var(--sun))" stroke="none"/>',
     // Everything else: a speech bubble with sun-yellow dots.
-    words: catSvg(
+    words:
       '<path d="M20 13.5a2.5 2.5 0 0 1-2.5 2.5H12l-4.6 4v-4h-.9A2.5 2.5 0 0 1 4 13.5v-7A2.5 2.5 0 0 1 6.5 4h11a2.5 2.5 0 0 1 2.5 2.5z"/>' +
       '<circle cx="9" cy="10" r="1" fill="rgb(var(--sun))" stroke="none"/>' +
       '<circle cx="12" cy="10" r="1" fill="rgb(var(--sun))" stroke="none"/>' +
-      '<circle cx="15" cy="10" r="1" fill="rgb(var(--sun))" stroke="none"/>'),
+      '<circle cx="15" cy="10" r="1" fill="rgb(var(--sun))" stroke="none"/>',
   };
+  var CATS = {};
+  Object.keys(CAT_ART).forEach(function (key) { CATS[key] = catSvg(CAT_ART[key]); });
   function catIcon(entry) {
     return CATS[entry.category] || CATS.words;
+  }
+  // The kind card's illustration: the same hand-drawn drawing as the block,
+  // at card size — the speech bubble for Words, the animal face for Sounds,
+  // the hand for Signs.
+  var KIND_CAT = { word: 'words', sound: 'animals', sign: 'body' };
+  function kindCardIcon(kind, wide) {
+    return catSvg(CAT_ART[KIND_CAT[kind]], wide ? 'h-11 w-11' : 'h-9 w-9');
   }
 
   // Phrases checked whole first, then single words. Order inside the lists
@@ -304,7 +315,10 @@
     child: null,
     languages: [],
     entries: [],
-    tab: 'all',
+    // The main screen is two views held here: the three kind cards, or one
+    // kind's age-grouped list (tab names the kind, never 'all').
+    view: 'cards', // cards | kind
+    tab: 'word',
     sessionLangs: [], // languages created this session, still unused
     quickPick: {}, // quick-start picks: item id -> true
   };
@@ -411,12 +425,11 @@
 '<main data-screen="loading" class="mx-auto w-full max-w-md px-4 pb-32 pt-4">' +
 '  <div class="skeleton h-9 w-44"></div>' +
 '  <div class="skeleton mt-3 h-5 w-56"></div>' +
-'  <div class="skeleton mt-5 h-16 w-full rounded-xl"></div>' +
-'  <div class="skeleton mt-6 h-5 w-36"></div>' +
-'  <div class="mt-2 flex flex-col gap-2">' +
-'    <div class="skeleton h-16 w-full rounded-xl"></div>' +
-'    <div class="skeleton h-16 w-full rounded-xl"></div>' +
-'    <div class="skeleton h-16 w-full rounded-xl"></div>' +
+'  <div class="skeleton mt-5 h-5 w-36"></div>' +
+'  <div class="mt-4 grid grid-cols-2 gap-3">' +
+'    <div class="skeleton col-span-2 h-28 rounded-2xl"></div>' +
+'    <div class="skeleton h-28 rounded-2xl"></div>' +
+'    <div class="skeleton h-28 rounded-2xl"></div>' +
 '  </div>' +
 '</main>';
   }
@@ -524,35 +537,61 @@
         '<span>' + countLine + '</span></p>'
       : '') +
 '  </header>' +
-'  ' + segHtml() +
-'  <div id="firsts-area">' + listHtml() + '</div>' +
+'  ' + (state.view === 'cards'
+      ? cardsHtml()
+      : kindBackHtml() + '<div id="firsts-area">' + listHtml() + '</div>') +
 '</main>' +
 '<div class="bar un-safe-bottom"><div class="mx-auto w-full max-w-md px-4 pb-4 pt-3">' +
 '  <button type="button" id="add-first" class="btn-primary w-full">' + ICON_PLUS + 'Add a first</button>' +
 '</div></div>';
   }
 
-  function segHtml() {
-    var tabs = [
-      { key: 'all', label: 'All', count: state.entries.length, dot: '' },
-      { key: 'word', label: 'Words', count: countKind('word'), dot: 'bg-word' },
-      { key: 'sound', label: 'Sounds', count: countKind('sound'), dot: 'bg-sound' },
-      { key: 'sign', label: 'Signs', count: countKind('sign'), dot: 'bg-sign' },
-    ];
-    return '<div class="seg mt-4" role="tablist" aria-label="Show">' + tabs.map(function (t) {
-      return '<button type="button" role="tab" aria-selected="' + (state.tab === t.key) +
-        '" data-tab="' + t.key + '" class="' + (state.tab === t.key ? 'on' : '') + '">' +
-        '<b class="flex items-center gap-1.5">' +
-        (t.dot ? '<i class="inline-block h-2 w-2 rounded-sm ' + t.dot + '" aria-hidden="true"></i>' : '') +
-        t.label + '</b><span>' + t.count + '</span></button>';
-    }).join('') + '</div>';
+  // The three kind cards the main screen opens on: Words wide on top,
+  // Sounds and Signs side by side below (the layout of the request's
+  // reference screenshot). Each shows the kind's illustration in its own
+  // colour, the count in big type, the kind's name, and its latest first.
+  function cardsHtml() {
+    return '<div class="mt-4 grid grid-cols-2 gap-3">' +
+      ['word', 'sound', 'sign'].map(function (kind) {
+        var k = KINDS[kind];
+        var count = countKind(kind);
+        var latest = state.entries.find(function (e) { return e.kind === kind; });
+        var latestLine = latest
+          ? 'Latest: ' + esc(latest.label) + ', ' + esc(fmtShort(latest.said_on))
+          : esc(k.empty);
+        var aria = k.many + ', ' + count + (count === 1 ? ' first' : ' firsts') +
+          (latest ? ', latest ' + latest.label + ', ' + fmtShort(latest.said_on) : '');
+        // Whole literals so the Tailwind extractor sees the classes (the
+        // kind variant is a literal map, like rowHtml's blkClass).
+        var cardClass = { word: 'kind-card-word', sound: 'kind-card-sound', sign: 'kind-card-sign' }[kind];
+        return '<button type="button" data-kind-card="' + kind + '" aria-label="' + esc(aria) +
+          '" class="kind-card ' + cardClass + (kind === 'word' ? ' col-span-2' : '') + '">' +
+          '<span class="flex items-start justify-between">' +
+            kindCardIcon(kind, kind === 'word') +
+            '<span class="font-rounded text-title font-bold">' + count + '</span>' +
+          '</span>' +
+          '<span class="mt-2 block font-rounded text-heading text-fg">' + k.many + '</span>' +
+          '<span class="mt-0.5 block truncate text-small">' + latestLine + '</span>' +
+        '</button>';
+      }).join('') +
+      '</div>';
+  }
+
+  // A kind list's top row: back to the cards, and the kind's count beside it.
+  function kindBackHtml() {
+    var k = KINDS[state.tab];
+    var count = countKind(state.tab);
+    return '<div class="mt-4 flex items-center justify-between gap-3">' +
+      '<button type="button" id="all-firsts" class="btn-secondary">' + ICON_BACK + 'All firsts</button>' +
+      '<span class="text-small text-muted">' +
+        count + ' ' + (count === 1 ? k.one.toLowerCase() : k.many.toLowerCase()) +
+      '</span>' +
+    '</div>';
   }
 
   function listHtml() {
-    var rows = state.tab === 'all'
-      ? state.entries
-      : state.entries.filter(function (e) { return e.kind === state.tab; });
-    if (!rows.length) return emptyHtml(rows === state.entries);
+    var rows = state.entries.filter(function (e) { return e.kind === state.tab; });
+    if (!rows.length) return emptyHtml();
     var map = new Map();
     rows.forEach(function (e) {
       var age = ageMonths(state.child.birthday, e.said_on);
@@ -607,15 +646,7 @@
 '</li>';
   }
 
-  function emptyHtml(noFirstsAtAll) {
-    if (noFirstsAtAll) {
-      return '' +
-'<div class="state-empty mt-6">' +
-'  <p class="text-body font-medium">No firsts yet.</p>' +
-'  <p class="text-body text-muted">Add the first word, animal sound or sign ' + esc(state.child.name) + ' makes.</p>' +
-'  <button type="button" class="btn-primary mt-2" data-add>' + ICON_PLUS + 'Add a first</button>' +
-'</div>';
-    }
+  function emptyHtml() {
     var k = KINDS[state.tab];
     return '' +
 '<div class="state-empty mt-6">' +
@@ -632,18 +663,21 @@
     var setupForm = app.querySelector('#setup-form');
     if (setupForm) setupForm.addEventListener('submit', onSetupSubmit);
 
-    app.querySelectorAll('[data-tab]').forEach(function (btn) {
+    app.querySelectorAll('[data-kind-card]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        state.tab = btn.getAttribute('data-tab');
+        state.view = 'kind';
+        state.tab = btn.getAttribute('data-kind-card');
         render();
       });
+    });
+    var allFirsts = app.querySelector('#all-firsts');
+    if (allFirsts) allFirsts.addEventListener('click', function () {
+      state.view = 'cards';
+      render();
     });
 
     var addFirst = app.querySelector('#add-first');
     if (addFirst) addFirst.addEventListener('click', function () { openEntrySheet(null); });
-    app.querySelectorAll('[data-add]').forEach(function (btn) {
-      btn.addEventListener('click', function () { openEntrySheet(null); });
-    });
     app.querySelectorAll('[data-add-kind]').forEach(function (btn) {
       btn.addEventListener('click', function () { openEntrySheet(null, btn.getAttribute('data-add-kind')); });
     });
@@ -834,12 +868,12 @@
   function openEntrySheet(entry, presetKind) {
     if (!state.child) return;
     var isEdit = !!entry;
+    // The sheet opens on the kind whose list is open, or a word from the
+    // cards view.
+    var preset = presetKind || (state.view === 'kind' ? state.tab : 'word');
     var form = {
-      kind: isEdit
-        ? entry.kind
-        : (presetKind || (state.tab !== 'all' ? state.tab : 'word')),
-      languageId: isEdit ? (entry.language_id || null) : defaultLanguageId(
-        presetKind || (state.tab !== 'all' ? state.tab : 'word')),
+      kind: isEdit ? entry.kind : preset,
+      languageId: isEdit ? (entry.language_id || null) : defaultLanguageId(preset),
       // A first word is usually said partially at first, so "still
       // learning" is the default; the toggle marks it mastered when the
       // whole word is there (the creator's ask).
