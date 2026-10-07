@@ -138,10 +138,11 @@ request changes the look on purpose.
   the token file, derived from the same hues; every text pair is at 4.5:1 in
   both looks.
 - **Signature element:** the **category block** — every first starts with
-  a 40 px rounded square carrying a small hand-drawn line illustration of
-  its **category** (animals get an animal, food a fruit, transport a car,
-  people two faces, and so on), drawn as an inline SVG in the block's kind
-  colour with a single sun-yellow accent, on the kind's soft colour with a
+  a 40 px rounded square carrying a small hand-inked line illustration of
+  its **category** (animals get a duck, food a baby bottle, transport a
+  car, people a grown-up and a baby, and so on), drawn as an inline SVG in
+  the block's kind colour with wobbly strokes and one sun-yellow patch
+  outlined in the same ink, on the kind's soft colour with a
   thicker bottom edge in the kind's colour, so it reads as a wooden toy
   block. The icon set lives in `public/app.js` (`CATS`); the ten categories
   and their inference are under App-specific conventions. A mastered first
