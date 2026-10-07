@@ -13,14 +13,14 @@
 @tailwind utilities;
 
 /* ── Colour tokens ────────────────────────────────────────────────────────
- * Rilo's palette follows the brand look (gaiababy.app): warm green-tinted
- * paper, olive ink and secondary text, a moss green action colour and the
- * brand yellow for a chosen state. The three kinds of first keep their own
- * block colours, re-tuned to sit in that palette: terracotta words, moss
- * sounds, slate blue signs. Each value is "R G B"; tailwind.config.js
- * names them. :root is the light look, and .dark, which the theme script
- * in public/index.html sets on <html>, the dark one (derived from the same
- * hues; the brand site itself ships only a light look).
+ * Rilo's palette follows the brand look (gaiababy.app): warm beige paper,
+ * olive ink and secondary text, a moss green action colour and the brand
+ * yellow for a chosen or mastered state. The three kinds of first keep
+ * their own block colours: terracotta words, moss sounds, slate blue
+ * signs. Each value is "R G B"; tailwind.config.js names them. :root is
+ * the light look, and .dark, which the theme script in public/index.html
+ * sets on <html>, the dark one (derived from the same hues; the brand site
+ * itself ships only a light look).
  *
  * Re-theme the app HERE: change the values, keep the names. Keep every text
  * pair at 4.5:1 or more in both looks: fg and muted on ground, surface and
@@ -51,19 +51,19 @@
   }
 
   :root {
-    --ground: 246 247 244;    /* the paper page (#F6F7F4) */
+    --ground: 247 243 234;    /* the warm beige paper page (#F7F3EA) */
     --surface: 255 255 255;   /* lists, sheet, fields */
-    --raised: 227 229 216;    /* switch track, tags (#E3E5D8) */
+    --raised: 236 229 214;    /* switch track, tags (#ECE5D6) */
     --fg: 29 29 27;           /* text (#1D1D1B) */
-    --muted: 90 91 72;        /* secondary text (#5A5B48) */
-    --line: 223 225 214;      /* borders, dividers, skeletons */
+    --muted: 96 90 73;        /* secondary text (#605A49) */
+    --line: 227 220 204;      /* borders, dividers, skeletons */
     --accent: 69 80 43;       /* moss: Add a first (#45502B) */
     --on-accent: 242 242 237; /* text on the accent (#F2F2ED) */
-    --sun: 254 233 81;        /* brand yellow: a chosen chip (#FEE951) */
+    --sun: 254 233 81;        /* brand yellow: a chosen chip, a mastered badge (#FEE951) */
     --on-sun: 29 29 27;
     --word: 168 68 44;        /* words: terracotta block */
     --word-soft: 247 227 219;
-    --sound: 85 98 47;        /* animal sounds: moss green block */
+    --sound: 85 98 47;        /* sounds: moss green block */
     --sound-soft: 228 235 213;
     --sign: 63 94 126;        /* signs: slate blue block */
     --sign-soft: 222 231 239;
@@ -79,12 +79,12 @@
     --un-action-danger: rgb(var(--danger));
   }
   .dark {
-    --ground: 27 28 24;
-    --surface: 36 38 32;
-    --raised: 48 51 42;
+    --ground: 28 27 22;
+    --surface: 38 36 29;
+    --raised: 53 50 40;
     --fg: 240 241 234;
-    --muted: 168 172 152;
-    --line: 62 66 54;
+    --muted: 174 168 150;
+    --line: 70 65 53;
     --accent: 150 165 96;
     --on-accent: 24 25 21;
     --sun: 254 233 81;
@@ -146,13 +146,15 @@
       placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-focus;
   }
 
-  /* A grouped list: <ul class="list"> of <li class="list-row">. The usual
-     way to show several things; prefer it to a stack of cards. */
+  /* A stack of soft module cards: <ul class="list"> of <li class="list-row">.
+     Each row is its own rounded, tappable card on the beige paper — the
+     layered, tactile look the brand asks for — rather than one connected
+     table. */
   .list {
-    @apply divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface;
+    @apply flex flex-col gap-2;
   }
   .list-row {
-    @apply flex min-h-11 items-center gap-3 px-4 py-3;
+    @apply flex min-h-11 items-center gap-3 overflow-hidden rounded-2xl border border-line bg-surface px-4 py-3;
   }
   /* A row that is itself a button (tapping a first opens it for editing):
      the .list-row li carries p-0, this button the padding. */
@@ -188,13 +190,26 @@
     @apply fixed inset-x-0 bottom-0 z-30 border-t border-line bg-ground/95;
   }
 
-  /* The alphabet block, Rilo's signature element: a 40 px wooden toy block
-     with the first's initial, on its kind's soft colour with a thicker
-     bottom edge in the kind's colour. <span class="blk blk-word">A</span>.
-     Always aria-hidden; the row's button carries the name. */
+  /* The block, Rilo's signature element: a 40 px wooden toy block showing
+     the first's category illustration (a hand-drawn line icon in the
+     kind's colour, with one soft sun-yellow accent), on its kind's soft
+     colour with a thicker bottom edge in the kind's colour.
+     <span class="blk blk-word">…svg…</span>. A mastered first carries a
+     small sun badge on the corner. Always aria-hidden; the row's button
+     carries the name. */
   .blk {
-    @apply flex h-10 w-10 flex-none items-center justify-center rounded-xl text-heading font-bold;
+    @apply relative flex h-10 w-10 flex-none items-center justify-center rounded-xl text-heading font-bold;
     border-bottom-width: 3px;
+  }
+  .blk svg {
+    @apply h-5 w-5;
+  }
+  .blk .mast {
+    @apply absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-sun;
+    border: 1.5px solid rgb(var(--surface));
+  }
+  .blk .mast svg {
+    @apply h-2 w-2;
   }
   .blk-word {
     background: rgb(var(--word-soft));

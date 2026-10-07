@@ -1,30 +1,40 @@
 # Rilo
 
 A baby book for a child's firsts: first words in any language, first
-animal sounds, and first signs. Every entry keeps what the child said,
-how they said it, which language it was in, and shows how old the child
-was when it happened. Everything is grouped by age, newest first, so the
-list reads as a growing timeline.
+sounds (animals and things — cow, car, ambulance, horn), and first
+signs. Every entry keeps what the child said, how they said it, which
+language it was in, and shows how old the child was when it happened.
+Everything is grouped by age, newest first, as separate tappable module
+cards, so the list reads as a growing timeline.
 
 ## How it works
 
 - **One screen.** Rilo opens on the child's firsts. A switch at the top
   filters All, Words, Sounds or Signs; **Add a first** (pinned to the
   bottom) opens a small form: kind, the word/animal/sign, how the child
-  says or signs it, a language, a date and an optional note.
+  says or signs it, a language, a date, an optional note, and a mastery
+  toggle (Still learning by default — a first word is usually partial,
+  like "wa" for water; mastered firsts wear a small yellow badge).
+- **Categories and illustrations.** Each first also gets a category —
+  people, animals, food, transport, play, body, home, outside, actions
+  or words — inferred from the word itself, never asked. Every row's
+  block carries a small hand-drawn line illustration of the category
+  with a yellow accent, so the timeline reads at a glance.
 - **Setup once, then a quick start.** On first use Rilo asks for the
   child's name and birth month (month and year — no full birthday); ages
   are whole months counted from it. Then a quick-start screen offers
-  common words, animal sounds and signs to tap, saving everything the
-  child already does dated that day, so nothing has to be typed in one by
-  one. The pencil button next to the title edits the name and birth month.
+  common words, sounds and signs to tap (sounds include car, ambulance
+  and horn, not just animals), saving everything the child already does
+  dated that day, so nothing has to be typed in one by one. The pencil
+  button next to the title edits the name and birth month.
 - **Languages are your own.** There is no preset list — add each one you
   use ("New language" in the form) and it stays a choice. A language can
   be attached to any kind of first.
 - **Light and dark** looks follow the viewer's Homeroom theme. The brand
-  look follows gaiababy.app: warm green-tinted paper, olive ink, a moss
-  green action colour, a brand yellow for chosen chips, pill buttons, and
-  Figtree/Inter type (self-hosted in `public/fonts`).
+  look follows gaiababy.app: warm beige paper, olive ink, a moss green
+  action colour, a brand yellow for chosen chips and mastered badges,
+  pill buttons, layered tactile cards, and Figtree/Inter type
+  (self-hosted in `public/fonts`).
 
 ## Data model
 
@@ -36,19 +46,24 @@ per owner (`owner_id = String(req.user.id)` on every query):
 - `languages` — the owner's own language list, unique case-insensitively.
 - `entries` — one first: `kind` (`word` | `sound` | `sign`), `label`,
   `sounds_like` (how it sounds or is signed), optional `language_id`,
-  `said_on` (a `date`), optional `note`.
+  `said_on` (a `date`), optional `note`, `category` (inferred on the
+  client, validated against a whitelist on the server, default `words`)
+  and `mastered` (boolean, default false).
 - `demo_seeds` — marks that a viewer's `?demo=1` demo was written, so
   deleted demo rows do not come back.
 
 Schema is created idempotently on boot (`ensureSchema()` before
-`app.listen`). `is_demo` is display-only.
+`app.listen`); the `category` and `mastered` columns are added to
+existing databases with `ADD COLUMN IF NOT EXISTS`. `is_demo` is
+display-only.
 
 ## Demo
 
 On a staging preview, open the app with `?demo=1` to see it populated
-with a demo child ("Leo") and 22 firsts in English, Spanish and ASL. It
-is the real screen: you can add, edit and delete, and those changes
-stay. Without `?demo=1` the plain setup screen shows.
+with a demo child ("Leo") and 23 firsts in English, Spanish and ASL,
+including mastered ones (with the yellow badge) and a car that goes
+vroom. It is the real screen: you can add, edit and delete, and those
+changes stay. Without `?demo=1` the plain setup screen shows.
 
 ## Development
 

@@ -210,10 +210,22 @@ const wrap = (fn) => (req, res, next) =>
 // all return to the page.
 const ENTRY_SELECT = `
   SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id,
+         e.category, e.mastered,
          e.said_on::text AS said_on, e.note, e.is_demo,
          l.name AS language_name
   FROM entries e LEFT JOIN languages l ON l.id = e.language_id
   WHERE e.id = $1 AND e.owner_id = $2`;
+
+// The category each first belongs to; it picks the illustration on the
+// block (people, animals, food…). The client infers it from the word and
+// may send it; the server accepts only this list.
+const CATEGORIES = new Set([
+  'people', 'animals', 'food', 'transport', 'play',
+  'body', 'home', 'outside', 'actions', 'words',
+]);
+function validCategory(value) {
+  return CATEGORIES.has(value) ? value : 'words';
+}
 
 app.get('/api/state', wrap(async (req, res) => {
   if (!req.user) {
@@ -241,6 +253,7 @@ app.get('/api/state', wrap(async (req, res) => {
     [ownerId]);
   const entries = await pool.query(
     `SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id,
+            e.category, e.mastered,
             e.said_on::text AS said_on, e.note, e.is_demo,
             l.name AS language_name
      FROM entries e LEFT JOIN languages l ON l.id = e.language_id
@@ -307,12 +320,15 @@ app.post('/api/languages', wrap(async (req, res) => {
 async function validateEntry(req, res, ownerId) {
   const kind = req.body.kind;
   if (kind !== 'word' && kind !== 'sound' && kind !== 'sign') {
-    res.status(400).json({ error: 'Choose Word, Animal sound or Sign.' });
+    res.status(400).json({ error: 'Choose Word, Sound or Sign.' });
     return null;
   }
   const label = typeof req.body.label === 'string' ? req.body.label.trim() : '';
   if (label.length < 1 || label.length > 60) {
-    res.status(400).json({ error: 'Write the ' + (kind === 'word' ? 'word' : kind === 'sound' ? 'animal' : 'sign') + '.' });
+    res.status(400).json({
+      error: kind === 'sound' ? 'Name the animal or thing.' :
+        kind === 'sign' ? 'Write the sign.' : 'Write the word.',
+    });
     return null;
   }
   const sounds_like = typeof req.body.sounds_like === 'string' ? req.body.sounds_like.trim() : '';
@@ -366,6 +382,8 @@ async function validateEntry(req, res, ownerId) {
     note: note || null,
     language_id,
     said_on,
+    category: validCategory(req.body.category),
+    mastered: req.body.mastered === true,
   };
 }
 
@@ -374,11 +392,12 @@ app.post('/api/entries', wrap(async (req, res) => {
   const values = await validateEntry(req, res, ownerId);
   if (!values) return;
   const inserted = await pool.query(
-    `INSERT INTO entries (owner_id, kind, label, sounds_like, language_id, said_on, note)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO entries (owner_id, kind, label, sounds_like, language_id, said_on, note,
+                          category, mastered)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
     [ownerId, values.kind, values.label, values.sounds_like, values.language_id,
-     values.said_on, values.note]);
+     values.said_on, values.note, values.category, values.mastered]);
   const row = await pool.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
   res.status(201).json(row.rows[0]);
 }));
@@ -414,7 +433,7 @@ app.post('/api/quick-start', wrap(async (req, res) => {
     if (label.length < 1 || label.length > 60) return null;
     const sounds_like = typeof item.sounds_like === 'string' ? item.sounds_like.trim() : '';
     if (sounds_like.length > 80) return null;
-    return [kind, label, sounds_like || null];
+    return [kind, label, sounds_like || null, validCategory(item.category)];
   });
   if (values.some(function (v) { return v === null; })) {
     return res.status(400).json({ error: 'One of the picks is missing its word, animal or sign.' });
@@ -425,9 +444,9 @@ app.post('/api/quick-start', wrap(async (req, res) => {
     const rows = [];
     for (const v of values) {
       const inserted = await client.query(
-        `INSERT INTO entries (owner_id, kind, label, sounds_like, said_on)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [ownerId, v[0], v[1], v[2], saidOn]);
+        `INSERT INTO entries (owner_id, kind, label, sounds_like, said_on, category, mastered)
+         VALUES ($1, $2, $3, $4, $5, $6, false) RETURNING id`,
+        [ownerId, v[0], v[1], v[2], saidOn, v[3]]);
       // Same client as the INSERT: the rows are not committed yet, so a
       // pool query would not see them.
       const row = await client.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
@@ -455,10 +474,10 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
   await pool.query(
     `UPDATE entries
      SET kind = $1, label = $2, sounds_like = $3, language_id = $4,
-         said_on = $5, note = $6, updated_at = NOW()
-     WHERE id = $7 AND owner_id = $8`,
+         said_on = $5, note = $6, category = $7, mastered = $8, updated_at = NOW()
+     WHERE id = $9 AND owner_id = $10`,
     [values.kind, values.label, values.sounds_like, values.language_id,
-     values.said_on, values.note, id, ownerId]);
+     values.said_on, values.note, values.category, values.mastered, id, ownerId]);
   const row = await pool.query(ENTRY_SELECT, [id, ownerId]);
   res.json(row.rows[0]);
 }));
@@ -517,6 +536,14 @@ async function ensureSchema() {
       seeded_at timestamptz NOT NULL DEFAULT NOW()
     );
   `);
+  // Added after the first version shipped (the creator's follow-up): every
+  // first belongs to a category, whose illustration shows on the block, and
+  // carries a mastery toggle for words said only partially so far. Both are
+  // idempotent so a database from the first version gains them on boot.
+  await pool.query(`
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'words';
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS mastered boolean NOT NULL DEFAULT false;
+  `);
   // All four tables hold personal family data: private, and staged without
   // their rows (see "Public vs private tables" in the platform conventions).
   await pool.query(`COMMENT ON TABLE children IS 'staging:private'`);
@@ -525,33 +552,37 @@ async function ensureSchema() {
   await pool.query(`COMMENT ON TABLE demo_seeds IS 'staging:private'`);
 }
 
-// The 22 demo firsts: kind, label, how it sounds or is signed, language, the
-// age in months it happened at, and the day within that month. The date is
-// the seeded child's birthday plus the months plus the day, capped at today.
+// The 23 demo firsts: kind, label, how it sounds or is signed, language,
+// category (which illustration the block shows), whether it is mastered
+// already, the age in months it happened at, and the day within that month.
+// The date is the seeded child's birthday plus the months plus the day,
+// capped at today. Older firsts are mastered; recent ones are still being
+// said partially, so both mastery states are visible.
 const DEMO_ROWS = [
-  { kind: 'word',  label: 'agua',     sounds_like: 'awa',     language: 'Spanish', months: 19, day: 4 },
-  { kind: 'sound', label: 'duck',     sounds_like: 'kak kak', language: 'English', months: 19, day: 2 },
-  { kind: 'sign',  label: 'more',     sounds_like: 'Taps fingertips together', language: 'ASL', months: 19, day: 0 },
-  { kind: 'word',  label: 'shoes',    sounds_like: 'choo',    language: 'English', months: 18, day: 27 },
-  { kind: 'sound', label: 'cow',      sounds_like: 'mmmoo',   language: 'English', months: 18, day: 21 },
-  { kind: 'word',  label: 'gato',     sounds_like: 'tato',    language: 'Spanish', months: 18, day: 14 },
-  { kind: 'sign',  label: 'milk',     sounds_like: 'Squeezes a fist', language: 'ASL', months: 18, day: 7 },
-  { kind: 'word',  label: 'banana',   sounds_like: 'nana',    language: 'English', months: 17, day: 29 },
-  { kind: 'sign',  label: 'all done', sounds_like: 'Twists both hands', language: 'ASL', months: 17, day: 20 },
-  { kind: 'sound', label: 'dog',      sounds_like: 'wuh wuh', language: 'English', months: 17, day: 13 },
-  { kind: 'word',  label: 'pelota',   sounds_like: 'lota',    language: 'Spanish', months: 17, day: 5,
+  { kind: 'word',  label: 'agua',     sounds_like: 'awa',     language: 'Spanish', category: 'food',     months: 19, day: 4 },
+  { kind: 'sound', label: 'duck',     sounds_like: 'kak kak', language: 'English', category: 'animals',  months: 19, day: 2 },
+  { kind: 'sign',  label: 'more',     sounds_like: 'Taps fingertips together', language: 'ASL', category: 'actions', months: 19, day: 0 },
+  { kind: 'word',  label: 'shoes',    sounds_like: 'choo',    language: 'English', category: 'body',     months: 18, day: 27 },
+  { kind: 'sound', label: 'cow',      sounds_like: 'mmmoo',   language: 'English', category: 'animals',  months: 18, day: 21 },
+  { kind: 'word',  label: 'gato',     sounds_like: 'tato',    language: 'Spanish', category: 'animals',  months: 18, day: 14 },
+  { kind: 'sign',  label: 'milk',     sounds_like: 'Squeezes a fist', language: 'ASL', category: 'food',  months: 18, day: 7 },
+  { kind: 'word',  label: 'banana',   sounds_like: 'nana',    language: 'English', category: 'food',     months: 17, day: 29 },
+  { kind: 'sign',  label: 'all done', sounds_like: 'Twists both hands', language: 'ASL', category: 'actions', months: 17, day: 20 },
+  { kind: 'sound', label: 'dog',      sounds_like: 'wuh wuh', language: 'English', category: 'animals',  months: 17, day: 13 },
+  { kind: 'word',  label: 'pelota',   sounds_like: 'lota',    language: 'Spanish', category: 'play',     months: 17, day: 5,
     note: 'Staging demo: rolled the ball to Abuela' },
-  { kind: 'word',  label: 'up',       sounds_like: 'ap',      language: 'English', months: 16, day: 24 },
-  { kind: 'sound', label: 'sheep',    sounds_like: 'beee',    language: 'Spanish', months: 16, day: 15 },
-  { kind: 'word',  label: 'abuela',   sounds_like: 'bela',    language: 'Spanish', months: 16, day: 8 },
-  { kind: 'sign',  label: 'eat',      sounds_like: 'Taps fingers to mouth', language: 'ASL', months: 15, day: 22 },
-  { kind: 'word',  label: 'hola',     sounds_like: 'ola',     language: 'Spanish', months: 15, day: 19 },
-  { kind: 'sound', label: 'cat',      sounds_like: 'ow ow',   language: 'English', months: 15, day: 10 },
-  { kind: 'word',  label: 'ball',     sounds_like: 'ba',      language: 'English', months: 14, day: 23 },
-  { kind: 'sound', label: 'owl',      sounds_like: 'hoo hoo', language: 'English', months: 14, day: 16 },
-  { kind: 'word',  label: 'dada',     sounds_like: 'dada',    language: 'English', months: 13, day: 17 },
-  { kind: 'sign',  label: 'bye',      sounds_like: 'Opens and closes a hand', language: 'ASL', months: 12, day: 21 },
-  { kind: 'word',  label: 'mamá',     sounds_like: 'mama',    language: 'Spanish', months: 12, day: 9 },
+  { kind: 'sound', label: 'car',      sounds_like: 'vroom',   language: 'English', category: 'transport', months: 16, day: 26 },
+  { kind: 'word',  label: 'up',       sounds_like: 'ap',      language: 'English', category: 'actions',  months: 16, day: 24 },
+  { kind: 'sound', label: 'sheep',    sounds_like: 'beee',    language: 'Spanish', category: 'animals',  months: 16, day: 15 },
+  { kind: 'word',  label: 'abuela',   sounds_like: 'bela',    language: 'Spanish', category: 'people',   months: 16, day: 8 },
+  { kind: 'sign',  label: 'eat',      sounds_like: 'Taps fingers to mouth', language: 'ASL', category: 'food', months: 15, day: 22, mastered: true },
+  { kind: 'word',  label: 'hola',     sounds_like: 'ola',     language: 'Spanish', category: 'actions',  months: 15, day: 19, mastered: true },
+  { kind: 'sound', label: 'cat',      sounds_like: 'ow ow',   language: 'English', category: 'animals',  months: 15, day: 10, mastered: true },
+  { kind: 'word',  label: 'ball',     sounds_like: 'ba',      language: 'English', category: 'play',     months: 14, day: 23, mastered: true },
+  { kind: 'sound', label: 'owl',      sounds_like: 'hoo hoo', language: 'English', category: 'animals',  months: 14, day: 16, mastered: true },
+  { kind: 'word',  label: 'dada',     sounds_like: 'dada',    language: 'English', category: 'people',   months: 13, day: 17, mastered: true },
+  { kind: 'sign',  label: 'bye',      sounds_like: 'Opens and closes a hand', language: 'ASL', category: 'actions', months: 12, day: 21, mastered: true },
+  { kind: 'word',  label: 'mamá',     sounds_like: 'mama',    language: 'Spanish', category: 'people',   months: 12, day: 9, mastered: true },
 ];
 
 // Populates the viewing account's own first-version demo, once per viewer,
@@ -625,11 +656,12 @@ async function seedDemoFor(ownerId, now) {
       await client.query(
         `INSERT INTO entries
            (owner_id, kind, label, sounds_like, language_id, said_on, note,
-            is_demo, demo_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8)
+            category, mastered, is_demo, demo_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10)
          ON CONFLICT (owner_id, demo_key) DO NOTHING`,
         [ownerId, row.kind, row.label, row.sounds_like,
          langId[row.language.toLowerCase()] || null, saidOn, row.note || null,
+         row.category || 'words', row.mastered === true,
          'demo-' + String(n).padStart(2, '0')]);
     }
     await client.query('COMMIT');

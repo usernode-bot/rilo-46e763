@@ -125,16 +125,19 @@
   var KINDS = {
     word: {
       one: 'Word', many: 'Words', the: 'The word',
+      eg: 'e.g. ball',
       how: function (name) { return 'How ' + name + ' says it'; },
       verb: 'says', empty: 'No words yet.', add: 'Add a word',
     },
     sound: {
-      one: 'Animal sound', many: 'Sounds', the: 'The animal',
+      one: 'Sound', many: 'Sounds', the: 'The animal or thing',
+      eg: 'e.g. cow or car',
       how: function (name) { return 'The sound ' + name + ' makes'; },
       verb: 'makes', empty: 'No sounds yet.', add: 'Add a sound',
     },
     sign: {
       one: 'Sign', many: 'Signs', the: 'The sign',
+      eg: 'e.g. more',
       how: function (name) { return 'How ' + name + ' signs it'; },
       verb: null, empty: 'No signs yet.', add: 'Add a sign',
     },
@@ -142,20 +145,24 @@
 
   // The quick start: common firsts a parent can tap in one go instead of
   // adding everything by hand (the creator's ask). Each pick is saved as an
-  // ordinary first dated today.
+  // ordinary first dated today. Sounds are anything that makes a sound,
+  // animals and things alike — a car goes vroom, a horn goes beep beep
+  // (the creator's ask), so the group is "Sounds", not "Animal sounds".
   var QUICK_STARTS = [
     { group: 'Words', kind: 'word', items: [
       { label: 'mama' }, { label: 'dada' }, { label: 'ball' }, { label: 'milk' },
       { label: 'water' }, { label: 'bye' }, { label: 'no' }, { label: 'uh-oh' },
       { label: 'kitty' }, { label: 'dog' }, { label: 'book' }, { label: 'more' },
     ] },
-    { group: 'Animal sounds', kind: 'sound', items: [
+    { group: 'Sounds', kind: 'sound', items: [
       { label: 'cow', sounds_like: 'moo' },
       { label: 'dog', sounds_like: 'woof woof' },
       { label: 'cat', sounds_like: 'meow' },
       { label: 'sheep', sounds_like: 'baa' },
       { label: 'duck', sounds_like: 'quack' },
       { label: 'car', sounds_like: 'vroom' },
+      { label: 'ambulance', sounds_like: 'wee-o wee-o' },
+      { label: 'horn', sounds_like: 'beep beep' },
     ] },
     { group: 'Signs', kind: 'sign', items: [
       { label: 'more', sounds_like: 'Taps fingertips together' },
@@ -165,6 +172,127 @@
       { label: 'eat', sounds_like: 'Taps fingers to mouth' },
     ] },
   ];
+
+  // ── Categories and their illustrations ────────────────────────────────
+  // Every first belongs to a category, and the block shows that category's
+  // illustration instead of a letter (the creator's ask: animals get an
+  // icon, food, transportation…). Each illustration is a small hand-drawn
+  // line drawing in the kind's colour with one soft sun-yellow accent, in
+  // the brand style. Words are bucketed by `inferCategory` when saved; the
+  // server accepts only these keys.
+  function catSvg(inner) {
+    return '<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
+  }
+  var CATS = {
+    // Two of us: the small sun above is the little one.
+    people: catSvg(
+      '<circle cx="9" cy="7.5" r="3.2"/>' +
+      '<path d="M3.8 19.5c.6-3.2 2.6-4.9 5.2-4.9s4.6 1.7 5.2 4.9"/>' +
+      '<circle cx="16.8" cy="9.3" r="2.4"/>' +
+      '<path d="M16.2 14.6c2.3.3 3.9 1.9 4.4 4.2"/>' +
+      '<circle cx="19.5" cy="4.8" r="1.4" fill="rgb(var(--sun))" stroke="none"/>'),
+    // A friendly face with ears; the sun-yellow nose.
+    animals: catSvg(
+      '<circle cx="12" cy="13.4" r="6.1"/>' +
+      '<path d="M7.7 9 6.3 4.9l4 2.1"/>' +
+      '<path d="M16.3 9l1.4-4.1-4 2.1"/>' +
+      '<circle cx="9.8" cy="12.9" r=".55" fill="currentColor" stroke="none"/>' +
+      '<circle cx="14.2" cy="12.9" r=".55" fill="currentColor" stroke="none"/>' +
+      '<circle cx="12" cy="15.4" r="1" fill="rgb(var(--sun))" stroke="none"/>'),
+    // An apple; the sun-yellow leaf.
+    food: catSvg(
+      '<path d="M12 8.4C8.7 6.6 5 8.8 5 12.3c0 3.7 3.1 7.2 5.5 7.2.9 0 1-.5 1.5-.5s.6.5 1.5.5c2.4 0 5.5-3.5 5.5-7.2 0-3.5-3.7-5.7-7-3.9z"/>' +
+      '<path d="M12 8.4c0-1.6.8-2.7 2.2-3.3"/>' +
+      '<path d="M13.9 5.9c1.6-.8 3.2-.6 4.3.4-1.1 1-2.8 1.2-4.3.4z" fill="rgb(var(--sun))" stroke="none"/>'),
+    // A little car; sun-yellow wheel hubs.
+    transport: catSvg(
+      '<path d="M4 16.2v-2.9l1.8-4c.3-.8 1-1.2 1.9-1.2h6.6c.8 0 1.5.4 1.9 1.1l2.3 4.1v2.9"/>' +
+      '<path d="M4 13.3h16"/>' +
+      '<path d="M4 16.2h1.6M9.1 16.2h5.8M18.4 16.2H20"/>' +
+      '<circle cx="7.3" cy="16" r="1.7"/>' +
+      '<circle cx="16.7" cy="16" r="1.7"/>' +
+      '<circle cx="7.3" cy="16" r=".55" fill="rgb(var(--sun))" stroke="none"/>' +
+      '<circle cx="16.7" cy="16" r=".55" fill="rgb(var(--sun))" stroke="none"/>'),
+    // A beach ball; the sun-yellow centre.
+    play: catSvg(
+      '<circle cx="12" cy="12" r="7"/>' +
+      '<path d="M5.6 9.2c4.2 2.3 8.6 2.3 12.8 0"/>' +
+      '<path d="M5.6 14.8c4.2-2.3 8.6-2.3 12.8 0"/>' +
+      '<circle cx="12" cy="12" r="1.2" fill="rgb(var(--sun))" stroke="none"/>'),
+    // A hand; the sun-yellow ring on the palm.
+    body: catSvg(
+      '<path d="M7.7 12.2V6.4a1.4 1.4 0 0 1 2.8 0v4.4"/>' +
+      '<path d="M10.5 10.8V5.2a1.4 1.4 0 0 1 2.8 0V11"/>' +
+      '<path d="M13.3 11V7.1a1.4 1.4 0 0 1 2.8 0v7.7c0 3.7-2.4 6.2-5.9 6.2-2.7 0-4.2-1.1-5.2-3l-1.3-2.5c-.5-.9-.2-2 .7-2.4.8-.4 1.7-.1 2.2.7l1.1 1.4"/>' +
+      '<circle cx="12.6" cy="14.6" r="1.1" fill="rgb(var(--sun))" stroke="none"/>'),
+    // Home: a house with the sun-yellow door.
+    home: catSvg(
+      '<path d="M4.5 11.2 12 4.8l7.5 6.4"/>' +
+      '<path d="M6.5 9.8v9.4h11V9.8"/>' +
+      '<path d="M10.6 19.2v-4.6h2.8v4.6z" fill="rgb(var(--sun))" stroke="none"/>'),
+    // Outside: a tree and the sun beside it.
+    outside: catSvg(
+      '<circle cx="11" cy="9.8" r="5.2"/>' +
+      '<path d="M11 15v5M8.2 20h5.6"/>' +
+      '<circle cx="18.6" cy="5.4" r="1.7" fill="rgb(var(--sun))" stroke="none"/>'),
+    // Things we do and say: sparkles, the small one in sun yellow.
+    actions: catSvg(
+      '<path d="M11 4.5l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z"/>' +
+      '<path d="M17.9 14.7l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7z" fill="rgb(var(--sun))" stroke="none"/>'),
+    // Everything else: a speech bubble with sun-yellow dots.
+    words: catSvg(
+      '<path d="M20 13.5a2.5 2.5 0 0 1-2.5 2.5H12l-4.6 4v-4h-.9A2.5 2.5 0 0 1 4 13.5v-7A2.5 2.5 0 0 1 6.5 4h11a2.5 2.5 0 0 1 2.5 2.5z"/>' +
+      '<circle cx="9" cy="10" r="1" fill="rgb(var(--sun))" stroke="none"/>' +
+      '<circle cx="12" cy="10" r="1" fill="rgb(var(--sun))" stroke="none"/>' +
+      '<circle cx="15" cy="10" r="1" fill="rgb(var(--sun))" stroke="none"/>'),
+  };
+  function catIcon(entry) {
+    return CATS[entry.category] || CATS.words;
+  }
+
+  // Phrases checked whole first, then single words. Order inside the lists
+  // does not matter; the first category whose list matches wins.
+  var CAT_PHRASES = {
+    'all done': 'actions', 'uh-oh': 'actions', 'uh oh': 'actions',
+    'night-night': 'home', 'night night': 'home',
+  };
+  var CAT_WORDS = {
+    people: ['mama', 'mamá', 'mamma', 'mom', 'mommy', 'mum', 'dada', 'dad', 'daddy',
+      'papa', 'papá', 'baba', 'nana', 'grandma', 'grandpa', 'abuela', 'abuelo',
+      'baby', 'sister', 'brother', 'tia', 'tía', 'tío', 'tio'],
+    animals: ['dog', 'cat', 'kitty', 'puppy', 'cow', 'duck', 'sheep', 'pig',
+      'horse', 'bird', 'bear', 'lion', 'fish', 'bunny', 'owl', 'gato', 'perro',
+      'pato', 'oveja', 'vaca', 'moo', 'woof', 'meow', 'quack'],
+    food: ['milk', 'agua', 'water', 'juice', 'banana', 'plátano', 'apple', 'cheese',
+      'bread', 'egg', 'cookie', 'snack', 'eat', 'drink', 'leche'],
+    transport: ['car', 'coche', 'bus', 'truck', 'train', 'plane', 'boat',
+      'ambulance', 'horn', 'vroom', 'beep', 'wee-o', 'weeo'],
+    play: ['ball', 'pelota', 'book', 'libro', 'blocks', 'bubbles', 'doll', 'puzzle', 'teddy'],
+    body: ['hand', 'nose', 'feet', 'toes', 'head', 'eyes', 'ears', 'hair',
+      'tummy', 'mouth', 'shoes', 'socks', 'hat'],
+    home: ['bed', 'cup', 'door', 'light', 'phone', 'blanket', 'bath', 'sleep',
+      'spoon', 'house', 'night'],
+    outside: ['tree', 'flower', 'moon', 'star', 'sun', 'rain', 'sky', 'snow', 'leaf'],
+    actions: ['more', 'bye', 'hi', 'hello', 'hola', 'adiós', 'adios', 'no', 'yes',
+      'please', 'sorry', 'up', 'down', 'kiss', 'hug', 'done', 'uh', 'oh'],
+  };
+  function inferCategory(label) {
+    var text = String(label || '').toLowerCase();
+    for (var phrase in CAT_PHRASES) {
+      if (text.indexOf(phrase) !== -1) return CAT_PHRASES[phrase];
+    }
+    var tokens = text.split(/[^a-záéíóúñü]+/).filter(Boolean);
+    for (var i = 0; i < tokens.length; i++) {
+      for (var cat in CAT_WORDS) {
+        if (CAT_WORDS[cat].indexOf(tokens[i]) !== -1) return cat;
+      }
+    }
+    return 'words';
+  }
+
+  // The sun badge on a block: this first is mastered, said in full.
+  var MAST_BADGE =
+    '<span class="mast"><svg viewBox="0 0 24 24" class="text-on-sun" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>';
 
   var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -461,11 +589,12 @@
       : '';
     var aria = k.one + ': ' + e.label +
       (e.sounds_like ? ', ' + (k.verb ? k.verb + ' ' : '') + e.sounds_like : '') +
+      (e.mastered ? ', mastered' : '') +
       (e.language_name ? ', ' + e.language_name : '') + ', ' + fmtLong(e.said_on);
     return '' +
 '<li class="list-row first-row p-0">' +
 '  <button type="button" class="row-btn" data-entry="' + e.id + '" aria-label="' + esc(aria) + '">' +
-'    <span class="blk font-rounded ' + blkClass + '" aria-hidden="true">' + esc(e.label.charAt(0).toUpperCase()) + '</span>' +
+'    <span class="blk ' + blkClass + '" aria-hidden="true">' + catIcon(e) + (e.mastered ? MAST_BADGE : '') + '</span>' +
 '    <span class="min-w-0 flex-1">' +
 '      <span class="block truncate text-body font-semibold">' + esc(e.label) + '</span>' +
       sub +
@@ -593,7 +722,12 @@
     QUICK_STARTS.forEach(function (group) {
       group.items.forEach(function (item, i) {
         if (state.quickPick[group.kind + '-' + i]) {
-          items.push({ kind: group.kind, label: item.label, sounds_like: item.sounds_like || '' });
+          items.push({
+            kind: group.kind,
+            label: item.label,
+            sounds_like: item.sounds_like || '',
+            category: inferCategory(item.label),
+          });
         }
       });
     });
@@ -706,6 +840,10 @@
         : (presetKind || (state.tab !== 'all' ? state.tab : 'word')),
       languageId: isEdit ? (entry.language_id || null) : defaultLanguageId(
         presetKind || (state.tab !== 'all' ? state.tab : 'word')),
+      // A first word is usually said partially at first, so "still
+      // learning" is the default; the toggle marks it mastered when the
+      // whole word is there (the creator's ask).
+      mastered: isEdit ? entry.mastered === true : false,
       newLang: false,
     };
 
@@ -721,11 +859,20 @@
       var name = state.child.name;
       content.querySelector('[data-kind-title]').textContent = isEdit ? 'Edit first' : 'Add a first';
       content.querySelector('[data-label-the]').textContent = k.the;
+      content.querySelector('[data-label-input]').placeholder = k.eg;
       content.querySelector('[data-label-how]').innerHTML = esc(k.how(name)) +
         ' <span class="font-normal text-muted">optional</span>';
       content.querySelectorAll('[data-kind]').forEach(function (btn) {
         btn.classList.toggle('on', btn.getAttribute('data-kind') === form.kind);
         btn.setAttribute('aria-checked', String(btn.getAttribute('data-kind') === form.kind));
+      });
+    }
+
+    function mastery() {
+      content.querySelectorAll('[data-mastery]').forEach(function (btn) {
+        var on = (btn.getAttribute('data-mastery') === 'yes') === form.mastered;
+        btn.classList.toggle('on', on);
+        btn.setAttribute('aria-checked', String(on));
       });
     }
 
@@ -791,6 +938,7 @@
 
     labels();
     chips();
+    mastery();
     ageHint();
 
     content.querySelector('[data-cancel]').addEventListener('click', function () { sheet.dismiss(); });
@@ -800,6 +948,12 @@
         if (!isEdit) form.languageId = defaultLanguageId(form.kind);
         labels();
         chips();
+      });
+    });
+    content.querySelectorAll('[data-mastery]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        form.mastered = btn.getAttribute('data-mastery') === 'yes';
+        mastery();
       });
     });
     content.querySelector('[data-date]').addEventListener('change', ageHint);
@@ -814,10 +968,13 @@
         language_id: form.languageId,
         said_on: content.querySelector('[data-date]').value,
         note: content.querySelector('[data-note]').value,
+        mastered: form.mastered,
       };
       var k = KINDS[form.kind];
       if (!payload.label.trim()) {
-        errEl.textContent = 'Write the ' + (form.kind === 'word' ? 'word' : form.kind === 'sound' ? 'animal' : 'sign') + '.';
+        errEl.textContent = form.kind === 'sound'
+          ? 'Name the animal or thing.'
+          : form.kind === 'sign' ? 'Write the sign.' : 'Write the word.';
         errEl.hidden = false;
         return;
       }
@@ -826,6 +983,9 @@
         errEl.hidden = false;
         return;
       }
+      // The category picks the illustration on the block; it follows the
+      // word itself, so it is not a field the parent fills in.
+      payload.category = inferCategory(payload.label);
       var button = content.querySelector('[data-save]');
       button.disabled = true;
       try {
@@ -885,6 +1045,13 @@
 '<input data-label-input class="field" type="text" maxlength="60" autocomplete="off" value="' + (isEdit ? esc(entry.label) : '') + '">' +
 '<label class="mb-1 mt-4 block text-small font-medium" data-label-how></label>' +
 '<input data-how-input class="field says" type="text" maxlength="80" autocomplete="off" value="' + (isEdit ? esc(entry.sounds_like || '') : '') + '">' +
+'<label class="mb-1 mt-4 block text-small font-medium">Mastery</label>' +
+'<div class="seg grid-cols-2" role="radiogroup" aria-label="Mastery">' +
+'<button type="button" role="radio" aria-checked="false" data-mastery="no">Still learning</button>' +
+'<button type="button" role="radio" aria-checked="false" data-mastery="yes">Mastered</button>' +
+'</div>' +
+'<p class="mt-1 text-small text-muted">Mastered means ' + esc(state.child.name) + ' says the whole ' +
+  (form.kind === 'sign' ? 'sign' : 'word') + ', not part of it.</p>' +
 '<label class="mb-1 mt-4 block text-small font-medium">Language <span class="font-normal text-muted">optional</span></label>' +
 '<div data-lang-area></div>' +
 '<label class="mb-1 mt-4 block text-small font-medium" for="entry-date">Date</label>' +

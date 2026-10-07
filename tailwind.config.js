@@ -59,7 +59,7 @@ module.exports = {
         'on-sun': token('on-sun'),
         word: token('word'), // words: terracotta block
         'word-soft': token('word-soft'),
-        sound: token('sound'), // animal sounds: moss green block
+        sound: token('sound'), // sounds: moss green block
         'sound-soft': token('sound-soft'),
         sign: token('sign'), // signs: slate blue block
         'sign-soft': token('sign-soft'),
