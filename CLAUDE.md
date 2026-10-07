@@ -97,35 +97,72 @@ tables you've marked private), etc.
 
 ## About Rilo
 
-Track your child's first words, animal sounds, and sign language across multiple languages
-
-_(add a sentence or two more of product context here so Claude Code has a
-shared understanding of what this app is for)_
+A baby book for one child's firsts: first words in any language, first
+sounds (animals and things: cow, car, ambulance, horn), and first signs.
+Each entry keeps the word (or animal/thing, or sign), how the child says
+it, an optional language of the parent's own choosing, and the date — and
+every entry shows how old the child was, because the whole point is
+watching the timeline grow. Each entry also carries a **category**
+(people, animals, food, transport, play, body, home, outside, actions,
+words — inferred from the label, not asked) and a **mastery** toggle
+("Still learning" by default, because a first word is usually partial:
+"wa" for water). One screen, one primary action ("Add a first");
+everything browses newest first grouped by age, as separate tappable
+module cards. Setup asks the child's name and birth month (month and
+year, not a full birthday) once, then offers a quick start: tap the
+common words, sounds and signs the child already does, and they are
+saved dated the day the family started using Rilo. More than one child,
+audio recordings of pronunciation, and renaming languages are later
+scope, not current.
 
 ## Design
 
-This app's look. The first real version fills in the blanks; every later
-change follows it, and updates it when a request changes the look on purpose.
+This app's look, set by the creator to follow the brand feel of
+[gaiababy.app](https://gaiababy.app/) (warm beige paper, olive-brown ink,
+moss action, a brand yellow accent, soft pill shapes, calm, contemporary,
+layered and tactile). Every later change follows it, and updates it when a
+request changes the look on purpose.
 
-- **Palette:** _(name the accent, any second colour and the neutrals, e.g.
-  "accent: tomato red; second: basil green; neutrals: warm greys")_
-- **Signature element:** _(the one thing on screen drawn from this app's
-  subject, which no other app would have)_
-- **Type scale:** `text-title`, `text-heading`, `text-body`, `text-small`
-  _(change their sizes in `tailwind.config.js` if you must, not their number)_
-- **One fixed look:** _(only for an app drawn as its own scene, such as a
-  game: which look, and why. Otherwise delete this line.)_
-
-The kit is in `styles/tailwind-input.css`: colour tokens with a light and
-a dark value (named in `tailwind.config.js`), and a few components
-(`btn-primary`, `btn-secondary`, `field`, `list` and `list-row`,
-`card`, `section-label`, `skeleton`, `state-empty`, `state-error`).
-Re-theme by changing the token values there, keeping every text pair at
-4.5:1 or more in both looks.
-
+- **Palette** (values live in `styles/tailwind-input.css`): warm beige
+  paper (ground `247 243 234` / dark `28 27 22`), white surfaces (dark
+  `38 36 29`), raised `236 229 214` (dark `53 50 40`), line `227 220 204`
+  (dark `70 65 53`), ink text `29 29 27`, warm olive secondary text
+  `96 90 73` (dark `174 168 150`). The action colour is **moss green**
+  (accent `69 80 43` with `242 242 237` on it), and the brand **yellow**
+  (`sun` `254 233 81` with ink text) marks a chosen chip and the mastered
+  badge — never a primary button. Three block colours, one per kind of
+  first: **terracotta** for words (`word`/`word-soft` = `168 68 44` on
+  `247 227 219`), **moss green** for sounds (`sound`/`sound-soft` =
+  `85 98 47` on `228 235 213`), and **slate blue** for signs
+  (`sign`/`sign-soft` = `63 94 126` on `222 231 239`). Dark values are in
+  the token file, derived from the same hues; every text pair is at 4.5:1 in
+  both looks.
+- **Signature element:** the **category block** — every first starts with
+  a 40 px rounded square carrying a small hand-drawn line illustration of
+  its **category** (animals get an animal, food a fruit, transport a car,
+  people two faces, and so on), drawn as an inline SVG in the block's kind
+  colour with a single sun-yellow accent, on the kind's soft colour with a
+  thicker bottom edge in the kind's colour, so it reads as a wooden toy
+  block. The icon set lives in `public/app.js` (`CATS`); the ten categories
+  and their inference are under App-specific conventions. A mastered first
+  wears a small sun badge with a check on the block's top-right corner.
+  The same three kind colours appear as small squares in the
+  All/Words/Sounds/Signs switch.
+- **Layout:** the timeline is a stack of separate rounded module cards
+  (`.list` / `.list-row`) — layered and tactile — not one connected
+  grouped list; each card is itself the tap target, so this does not
+  violate the no-cards-in-cards rule.
+- **Type:** Figtree for headings (`font-rounded`), Inter for body text,
+  both self-hosted variable fonts in `public/fonts`; how a child
+  says a word is `.says`, an italic serif inside curly quotes, like a
+  handwritten note in a baby book. Scale: `text-title`, `text-heading`,
+  `text-body`, `text-small`, nothing in between.
+- **Shapes:** pill buttons and chips (`rounded-full`), soft 12–16 px corners
+  on fields, lists and blocks.
 - Colour comes only from the tokens (`bg-ground`, `bg-surface`,
   `text-fg`, `text-muted`, `border-line`, `bg-accent` with
-  `text-on-accent`, ...): never a raw hex value or a stock palette class.
+  `text-on-accent`, `bg-sun` with `text-on-sun`, ...): never a raw hex value
+  or a stock palette class.
 - Tap targets are at least 44 px; the buttons and fields already are.
 - A field's label says what it is; its placeholder, if any, is an example
   that says so ("e.g. 5.0"), never a bare value that could pass for one
@@ -137,8 +174,55 @@ Re-theme by changing the token values there, keeping every text pair at
   ("Staging mock data" in the platform conventions).
 - No cards in cards, no uppercase eyebrows, no emoji as icons.
 
+The kit is in `styles/tailwind-input.css`: colour tokens with a light and
+a dark value (named in `tailwind.config.js`), the two `@font-face` rules,
+and components (`btn-primary`, `btn-secondary`, `field`, `list` and
+`list-row`, `row-btn`, `seg`, `blk`, `chip`, `says`, `tag`, `bar`, `card`,
+`section-label`, `skeleton`, `state-empty`, `state-error`). Re-theme by
+changing the token values there, keeping every text pair at 4.5:1 or more in
+both looks. The native UI kit's own `--un-*` variables are mapped onto the
+tokens (both looks) in the same file.
+
 ## App-specific conventions
 
-_(optional — e.g. "all currency values stored as integer cents, not
-floats"; "the `posts` table is append-only"; "avoid adding new
-dependencies"; etc.)_
+- All four tables (`children`, `languages`, `entries`, `demo_seeds`) are
+  `staging:private` and per owner: every query is scoped to
+  `owner_id = String(req.user.id)`; there are no public tables.
+- The birthday is asked as **month and year only** (the creator's ask):
+  `PUT /api/child` takes `birth_month` (`YYYY-MM`) and stores it as that
+  month's first day, so every age counts whole calendar months from the
+  month itself. Firsts keep full dates.
+- Every entry has a **category** and a **mastery** flag (added after v1
+  per the creator's follow-up; `ensureSchema()` adds both columns with
+  `ADD COLUMN IF NOT EXISTS`). `category` is one of a whitelist in
+  `server.js` (`CATEGORIES`: people, animals, food, transport, play,
+  body, home, outside, actions, words — anything else falls back to
+  `words`); the client infers it from the label (`inferCategory` in
+  `public/app.js`: phrase map first, then per-token keyword match,
+  Spanish words included) and it is never a field the parent fills in.
+  `mastered` is a boolean, false by default; the add/edit sheet has a
+  Still learning / Mastered toggle and mastered rows show the sun badge.
+- **Sounds are animals AND things** (the creator's ask: car vroom,
+  ambulance wee-o, horn beep beep) — the kind is labelled "Sound", the
+  quick-start group is "Sounds", and its prompt asks for "the animal or
+  thing". Quick starts are saved as ordinary firsts dated the day the
+  family started using Rilo, with the category inferred.
+- Dates are Postgres `date` columns and travel as `YYYY-MM-DD` strings
+  everywhere (cast to text in SELECTs so node-pg never shifts the day); a
+  date is what the parent entered in their own calendar, and the server
+  allows up to one day past its UTC "today" as slack (one month of slack
+  for a birth month).
+- Ages count **whole months** between the birthday and a date
+  (`(y2−y1)*12 + (m2−m1) − (d2<d1 ? 1 : 0)`), formatted "Under 1 month",
+  "N months", "1 year", "1 year 3 months"…
+- `is_demo` (and the `demo_seeds` marker) is display-only: no logic reads
+  it. The populated demo exists only on staging with `?demo=1`, written
+  once per viewing account by `seedDemoFor()`; a viewer's own child is
+  kept, a real save of name/birthday clears `is_demo`, and an account
+  that already has entries of its own is never seeded at all.
+- One capture identity runs all of dapp.json's checks, so never declare a
+  check whose expectation depends on the account being empty — route the
+  assertion through `?demo=1` or accept both final screens (see the `/`
+  check's selector).
+- Avoid adding new dependencies; the app is Express + pg + precompiled
+  Tailwind.
