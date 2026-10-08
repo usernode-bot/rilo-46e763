@@ -14,12 +14,35 @@
       "expectSelector": ".kind-card",
       "expectText": "Latest:",
       "visual": true,
-      "impact": ["public/**", "styles/**", "tailwind.config.js", "server.js"]
+      "impact": [
+        "public/**",
+        "styles/**",
+        "tailwind.config.js",
+        "server.js"
+      ]
     },
     {
       "name": "Populated demo (dark)",
       "path": "/?demo=1&un-theme=dark",
       "expectSelector": "html.dark .kind-card"
+    },
+    {
+      "name": "Word insights and monthly chart",
+      "path": "/?demo=1&un-theme=light#insights",
+      "expectSelector": ".growth-chart",
+      "expectText": "What to try next"
+    },
+    {
+      "name": "Child profile",
+      "path": "/?demo=1#profile",
+      "expectSelector": ".profile-card",
+      "expectText": "Edit child profile"
+    },
+    {
+      "name": "Searchable entry collection",
+      "path": "/?demo=1#log",
+      "expectSelector": "#word-search",
+      "expectText": "Word collection"
     }
   ]
 }
