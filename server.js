@@ -210,7 +210,7 @@ const wrap = (fn) => (req, res, next) =>
 // all return to the page.
 const ENTRY_SELECT = `
   SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id,
-         e.category, e.mastered,
+         e.category, e.mastered, e.mastery, e.mastery_history,
          e.said_on::text AS said_on, e.note, e.is_demo,
          l.name AS language_name
   FROM entries e LEFT JOIN languages l ON l.id = e.language_id
@@ -225,6 +225,16 @@ const CATEGORIES = new Set([
 ]);
 function validCategory(value) {
   return CATEGORIES.has(value) ? value : 'words';
+}
+
+// Mastery has three stages (the creator's redesign): emerging (tried it once
+// or twice), practicing (uses it with a nudge) and mastered (says it on their
+// own). The older boolean `mastered` column is kept in step with it, so a
+// request that still sends only `mastered` keeps working.
+const MASTERY = new Set(['emerging', 'practicing', 'mastered']);
+function validMastery(body) {
+  if (MASTERY.has(body.mastery)) return body.mastery;
+  return body.mastered === true ? 'mastered' : 'emerging';
 }
 
 app.get('/api/state', wrap(async (req, res) => {
@@ -253,7 +263,7 @@ app.get('/api/state', wrap(async (req, res) => {
     [ownerId]);
   const entries = await pool.query(
     `SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id,
-            e.category, e.mastered,
+            e.category, e.mastered, e.mastery, e.mastery_history,
             e.said_on::text AS said_on, e.note, e.is_demo,
             l.name AS language_name
      FROM entries e LEFT JOIN languages l ON l.id = e.language_id
@@ -383,7 +393,7 @@ async function validateEntry(req, res, ownerId) {
     language_id,
     said_on,
     category: validCategory(req.body.category),
-    mastered: req.body.mastered === true,
+    mastery: validMastery(req.body),
   };
 }
 
@@ -391,13 +401,16 @@ app.post('/api/entries', wrap(async (req, res) => {
   const ownerId = String(req.user.id);
   const values = await validateEntry(req, res, ownerId);
   if (!values) return;
+  // The journey starts on the day it was first noticed, at the stage chosen.
+  const history = JSON.stringify([{ level: values.mastery, on: values.said_on }]);
   const inserted = await pool.query(
     `INSERT INTO entries (owner_id, kind, label, sounds_like, language_id, said_on, note,
-                          category, mastered)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                          category, mastered, mastery, mastery_history)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
      RETURNING id`,
     [ownerId, values.kind, values.label, values.sounds_like, values.language_id,
-     values.said_on, values.note, values.category, values.mastered]);
+     values.said_on, values.note, values.category, values.mastery === 'mastered',
+     values.mastery, history]);
   const row = await pool.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
   res.status(201).json(row.rows[0]);
 }));
@@ -444,9 +457,12 @@ app.post('/api/quick-start', wrap(async (req, res) => {
     const rows = [];
     for (const v of values) {
       const inserted = await client.query(
-        `INSERT INTO entries (owner_id, kind, label, sounds_like, said_on, category, mastered)
-         VALUES ($1, $2, $3, $4, $5, $6, false) RETURNING id`,
-        [ownerId, v[0], v[1], v[2], saidOn, v[3]]);
+        `INSERT INTO entries (owner_id, kind, label, sounds_like, said_on, category,
+                              mastered, mastery, mastery_history)
+         VALUES ($1, $2, $3, $4, $5, $6, false, 'practicing', $7::jsonb)
+         RETURNING id`,
+        [ownerId, v[0], v[1], v[2], saidOn, v[3],
+         JSON.stringify([{ level: 'practicing', on: saidOn }])]);
       // Same client as the INSERT: the rows are not committed yet, so a
       // pool query would not see them.
       const row = await client.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
@@ -467,17 +483,29 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
   const id = Number.parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(404).json({ error: 'First not found.' });
   const owned = await pool.query(
-    'SELECT 1 FROM entries WHERE id = $1 AND owner_id = $2', [id, ownerId]);
+    'SELECT mastery FROM entries WHERE id = $1 AND owner_id = $2', [id, ownerId]);
   if (!owned.rows.length) return res.status(404).json({ error: 'First not found.' });
   const values = await validateEntry(req, res, ownerId);
   if (!values) return;
+  // A change of stage is a step on the word's journey, dated today (the
+  // request's own "now", so a staging preview's chosen moment rules it).
+  // A first never earlier than the day it was first noticed.
+  const changed = owned.rows[0].mastery !== values.mastery;
+  const today = serverToday(req.now);
+  const step = JSON.stringify([{
+    level: values.mastery, on: today < values.said_on ? values.said_on : today,
+  }]);
   await pool.query(
     `UPDATE entries
      SET kind = $1, label = $2, sounds_like = $3, language_id = $4,
-         said_on = $5, note = $6, category = $7, mastered = $8, updated_at = NOW()
-     WHERE id = $9 AND owner_id = $10`,
+         said_on = $5, note = $6, category = $7, mastered = $8, mastery = $9,
+         mastery_history = CASE WHEN $10::boolean
+           THEN mastery_history || $11::jsonb ELSE mastery_history END,
+         updated_at = NOW()
+     WHERE id = $12 AND owner_id = $13`,
     [values.kind, values.label, values.sounds_like, values.language_id,
-     values.said_on, values.note, values.category, values.mastered, id, ownerId]);
+     values.said_on, values.note, values.category, values.mastery === 'mastered',
+     values.mastery, changed, step, id, ownerId]);
   const row = await pool.query(ENTRY_SELECT, [id, ownerId]);
   res.json(row.rows[0]);
 }));
@@ -544,6 +572,20 @@ async function ensureSchema() {
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'words';
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS mastered boolean NOT NULL DEFAULT false;
   `);
+  // The three-stage mastery and its journey (the creator's redesign). Rows
+  // from before it map their boolean: mastered stays mastered, "still
+  // learning" becomes practicing, and the journey starts as that one stage on
+  // the day the first was noticed. Both statements are idempotent.
+  await pool.query(`
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS mastery text;
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS mastery_history jsonb NOT NULL DEFAULT '[]'::jsonb;
+    UPDATE entries SET mastery = CASE WHEN mastered THEN 'mastered' ELSE 'practicing' END
+      WHERE mastery IS NULL;
+    UPDATE entries
+      SET mastery_history = jsonb_build_array(
+        jsonb_build_object('level', mastery, 'on', said_on::text))
+      WHERE mastery_history = '[]'::jsonb;
+  `);
   // All four tables hold personal family data: private, and staged without
   // their rows (see "Public vs private tables" in the platform conventions).
   await pool.query(`COMMENT ON TABLE children IS 'staging:private'`);
@@ -556,8 +598,8 @@ async function ensureSchema() {
 // category (which illustration the block shows), whether it is mastered
 // already, the age in months it happened at, and the day within that month.
 // The date is the seeded child's birthday plus the months plus the day,
-// capped at today. Older firsts are mastered; recent ones are still being
-// said partially, so both mastery states are visible.
+// capped at today. Older firsts are mastered, the last few months' are
+// practicing and the newest are emerging, so all three stages are visible.
 const DEMO_ROWS = [
   { kind: 'word',  label: 'agua',     sounds_like: 'awa',     language: 'Spanish', category: 'food',     months: 19, day: 4 },
   { kind: 'sound', label: 'duck',     sounds_like: 'kak kak', language: 'English', category: 'animals',  months: 19, day: 2 },
@@ -653,15 +695,28 @@ async function seedDemoFor(ownerId, now) {
       const at = new Date(Date.UTC(by, bm - 1 + row.months, bd + row.day));
       const saidOn = at.toISOString().slice(0, 10) > todayIso
         ? todayIso : at.toISOString().slice(0, 10);
+      // All three stages show: the newest firsts are emerging, the last few
+      // months' are practicing, and the oldest are mastered. Each journey
+      // starts emerging on the day it was noticed and steps up later.
+      const mastery = row.mastered === true ? 'mastered'
+        : row.months >= 19 ? 'emerging' : 'practicing';
+      const later = (days) => {
+        const d = addDays(saidOn, days);
+        return d > todayIso ? todayIso : d;
+      };
+      const journey = [{ level: 'emerging', on: saidOn }];
+      if (mastery !== 'emerging') journey.push({ level: 'practicing', on: later(9) });
+      if (mastery === 'mastered') journey.push({ level: 'mastered', on: later(30) });
       await client.query(
         `INSERT INTO entries
            (owner_id, kind, label, sounds_like, language_id, said_on, note,
-            category, mastered, is_demo, demo_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10)
+            category, mastered, mastery, mastery_history, is_demo, demo_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, true, $12)
          ON CONFLICT (owner_id, demo_key) DO NOTHING`,
         [ownerId, row.kind, row.label, row.sounds_like,
          langId[row.language.toLowerCase()] || null, saidOn, row.note || null,
-         row.category || 'words', row.mastered === true,
+         row.category || 'words', mastery === 'mastered', mastery,
+         JSON.stringify(journey),
          'demo-' + String(n).padStart(2, '0')]);
     }
     await client.query('COMMIT');
