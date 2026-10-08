@@ -226,6 +226,26 @@
     color: rgb(var(--sign));
     border-color: rgb(var(--sign) / 0.5);
   }
+  /* The large block on a kind card (Words / Sounds / Signs on the main
+     screen): the same toy block, one size up. */
+  .blk-lg {
+    @apply h-14 w-14 rounded-2xl;
+  }
+  .blk-lg svg {
+    @apply h-8 w-8;
+  }
+
+  /* The three kind cards the main screen opens on: <button
+     class="kind-card" data-kind-card="word"> inside <div class="kind-grid">,
+     the wide one also col-span-2. Each is its own tappable card that opens
+     that kind's list. */
+  .kind-grid {
+    @apply grid grid-cols-2 gap-2;
+  }
+  .kind-card {
+    @apply flex min-h-11 flex-col justify-between gap-3 rounded-2xl border border-line bg-surface p-4 text-left text-fg
+      hover:bg-raised/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus;
+  }
 
   /* Tap-to-pick chips (languages, the quick-start picks): <button
      class="chip">Spanish</button>, the chosen one with "chip-on" in the

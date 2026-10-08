@@ -11,15 +11,15 @@
       "id": "firsts.demo",
       "name": "Populated demo (light)",
       "path": "/?demo=1&un-theme=light",
-      "expectSelector": ".first-row",
-      "expectText": "Staging demo",
+      "expectSelector": ".kind-card",
+      "expectText": "Latest:",
       "visual": true,
       "impact": ["public/**", "styles/**", "tailwind.config.js", "server.js"]
     },
     {
       "name": "Populated demo (dark)",
       "path": "/?demo=1&un-theme=dark",
-      "expectSelector": "html.dark .first-row"
+      "expectSelector": "html.dark .kind-card"
     }
   ]
 }

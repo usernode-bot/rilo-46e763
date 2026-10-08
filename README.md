@@ -9,12 +9,14 @@ cards, so the list reads as a growing timeline.
 
 ## How it works
 
-- **One screen.** Rilo opens on the child's firsts. A switch at the top
-  filters All, Words, Sounds or Signs; **Add a first** (pinned to the
-  bottom) opens a small form: kind, the word/animal/sign, how the child
-  says or signs it, a language, a date, an optional note, and a mastery
-  toggle (Still learning by default — a first word is usually partial,
-  like "wa" for water; mastered firsts wear a small yellow badge).
+- **One screen.** Rilo opens on three cards — Words, Sounds and Signs —
+  each showing its count and the latest first; tapping a card opens that
+  kind's list, grouped by age newest first, with an **All firsts** button
+  back to the cards. **Add a first** (pinned to the bottom) opens a small
+  form: kind, the word/animal/sign, how the child says or signs it, a
+  language, a date, an optional note, and a mastery toggle (Still learning
+  by default — a first word is usually partial, like "wa" for water;
+  mastered firsts wear a small yellow badge).
 - **Categories and illustrations.** Each first also gets a category —
   people, animals, food, transport, play, body, home, outside, actions
   or words — inferred from the word itself, never asked. Every row's
