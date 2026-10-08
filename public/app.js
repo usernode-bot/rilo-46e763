@@ -1,5 +1,5 @@
 /* Rilo's client. Renders the whole screen into #app — setup, loading,
- * error, and the firsts list — and opens the add/edit sheet, the child
+ * error, and the entries list — and opens the add/edit sheet, the child
  * sheet, the delete confirm and the toasts through the platform's
  * native UI kit (unNative), with a plain fallback when it is absent.
  *
@@ -146,7 +146,7 @@
     },
   };
 
-  // The quick start: common firsts a parent can tap in one go instead of
+  // The quick start: common entries a parent can tap in one go instead of
   // adding everything by hand (the creator's ask). Each pick is saved as an
   // ordinary first dated today. Sounds are anything that makes a sound,
   // animals and things alike — a car goes vroom, a horn goes beep beep
@@ -176,91 +176,7 @@
     ] },
   ];
 
-  // ── Categories and their illustrations ────────────────────────────────
-  // Every first belongs to a category, and the block shows that category's
-  // illustration instead of a letter (the creator's ask: animals get an
-  // icon, food, transportation…). Each illustration is a hand-inked line
-  // drawing in the kind's colour — slightly wobbly shapes, small faces and
-  // detail strokes — with one sun-yellow patch outlined in the same line
-  // colour, after the reference illustrations. Words are bucketed by
-  // `inferCategory` when saved; the server accepts only these keys.
-  function catSvg(inner) {
-    // Hand-inked line drawing in the kind's colour (via currentColor) with
-    // one ink-outlined sun-yellow patch: the patch element carries
-    // fill="rgb(var(--sun))" and no stroke="none", so it keeps the stroke.
-    return '<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
-  }
-  var CATS = {
-    // A grown-up's face and a baby's face, both smiling; the baby's yellow bonnet.
-    people: catSvg(
-      '<path d="M8.6 6.4c2.6-.1 4.5 2 4.4 4.6-.1 2.5-2 4.4-4.5 4.4S4 13.6 4.1 11c.1-2.6 1.9-4.5 4.5-4.6z"/>' +
-      '<path d="M7 10.4v.2M10.2 10.4v.2"/>' +
-      '<path d="M7.1 12.6c.8.8 2.1.8 3 0"/>' +
-      '<path d="M3.4 20.2c.7-2.4 2.6-3.6 5-3.6 1.2 0 2.3.3 3.1.9"/>' +
-      '<path d="M16.7 11.6c1.9 0 3.3 1.4 3.3 3.3s-1.5 3.3-3.4 3.2c-1.8 0-3.2-1.5-3.1-3.3.1-1.9 1.4-3.2 3.2-3.2z"/>' +
-      '<path d="M15.6 14.8v.1M17.9 14.8v.1"/>' +
-      '<path d="M15.8 16.4c.5.4 1.2.4 1.7 0"/>' +
-      '<path d="M13.4 13.3c.2-2.5 1.6-4 3.4-4s3.3 1.5 3.4 4c-1.1-.9-2.2-1.3-3.4-1.3s-2.3.4-3.4 1.3z" fill="rgb(var(--sun))"/>'),
-    // A little duck in profile, eye and smile; the sun-yellow beak.
-    animals: catSvg(
-      '<path d="M4.6 13.1c1.5.5 2.8.4 4.1-.2-.4-.7-.6-1.5-.5-2.4.2-2 1.9-3.5 3.9-3.4 2 .1 3.5 1.8 3.4 3.8 0 .7-.3 1.4-.7 2 1.5-.2 2.8-.8 3.8-1.9.6 3.9-2.4 7.4-6.6 7.5-3.6.1-6.6-2.2-7.4-5.4z"/>' +
-      '<path d="M13.1 9.9v.2"/>' +
-      '<path d="M10.4 15.5c1.4.9 3.1 1 4.6.2"/>' +
-      '<path d="M15.9 10.3l3-.4c-.3 1.1-1.2 1.7-2.5 1.7z" fill="rgb(var(--sun))"/>'),
-    // A baby bottle with teat and measure ticks; the sun-yellow collar.
-    food: catSvg(
-      '<path d="M10.6 6.6c0-1.3.4-2.9 1.4-3.3 1 .3 1.5 1.9 1.4 3.3"/>' +
-      '<path d="M9.6 8.8c-1.6 1.1-2.5 2.4-2.4 4.2l.1 5.6c0 1.2.8 1.9 2 1.9h5.5c1.2 0 2-.7 2-1.9l-.1-5.6c0-1.8-.7-3.1-2.3-4.2"/>' +
-      '<path d="M14.4 12.6h1.5M14.5 15.1h1.4"/>' +
-      '<path d="M9.4 6.6l5.2-.1.1 2.3-5.4.1z" fill="rgb(var(--sun))"/>'),
-    // A toy car with two wheels; the sun-yellow windows.
-    transport: catSvg(
-      '<path d="M3.9 16.2c-.2-1.5.2-2.6 1.5-3l1.8-.5 1.6-3.1c.4-.7 1-1.1 1.8-1.1h4.2c.8 0 1.4.3 1.9 1l2 2.9 1.5.4c1 .3 1.6 1.2 1.5 2.4"/>' +
-      '<path d="M5.6 16.4h.4M9.8 16.5h4.3M17.9 16.4h.3"/>' +
-      '<path d="M7.9 14.6c1 0 1.8.8 1.8 1.8s-.8 1.8-1.9 1.7c-1 0-1.7-.8-1.7-1.8s.8-1.7 1.8-1.7zM16 14.6c1 0 1.8.8 1.8 1.8s-.8 1.7-1.8 1.7-1.8-.8-1.8-1.8.8-1.7 1.8-1.7z"/>' +
-      '<path d="M9.3 12.1l1.1-2.3c.2-.4.5-.6 1-.6h2.9c.5 0 .8.2 1.1.6l1.3 2.3z" fill="rgb(var(--sun))"/>' +
-      '<path d="M12.6 9.3v2.8"/>'),
-    // A beach ball with a shine line; one stripe band in sun yellow.
-    play: catSvg(
-      '<path d="M5.3 10c4.3 1.8 8.9 1.8 13.3-.1.4 1.3.5 2.8.2 4.2-4.4 1.6-9.1 1.6-13.6 0-.3-1.4-.3-2.8.1-4.1z" fill="rgb(var(--sun))"/>' +
-      '<path d="M12.2 4.9c3.9.1 6.9 3.3 6.8 7.2-.1 3.9-3.3 7-7.2 6.9-3.9-.1-6.9-3.2-6.8-7.1.1-4 3.2-7.1 7.2-7z"/>' +
-      '<path d="M8.7 7.5c.7-.6 1.5-1 2.4-1.2"/>'),
-    // A baby's foot with three small toes; the big toe in sun yellow.
-    body: catSvg(
-      '<path d="M9.4 20.6c-2.2-.1-3.5-1.9-3.4-4.3.1-2.3 1.4-3.8 1.4-6 0-1.8.9-3 2.4-3 2.5-.1 5 1.2 6 3.5.9 2.2.4 4.4-.6 6.4-1.2 2.4-3.2 3.5-5.8 3.4z"/>' +
-      '<path d="M8.7 4.9c.1-1.2 1-1.9 2-1.8s1.6 1 1.5 2.1c-.1 1.1-1 1.8-2 1.7s-1.6-1-1.5-2z" fill="rgb(var(--sun))"/>' +
-      '<path d="M14.1 5.1c.6 0 1 .4 1 1s-.5.9-1 .9-.9-.4-.9-.9.4-1 .9-1zM16.3 6.8c.5 0 .8.4.8.8s-.4.8-.8.8-.8-.4-.8-.8.3-.8.8-.8zM17.7 9.1c.4 0 .7.3.7.7s-.3.7-.7.7-.7-.3-.7-.7.3-.7.7-.7z"/>'),
-    // Home: a house with chimney and window; the sun-yellow door.
-    home: catSvg(
-      '<path d="M4.4 11.5l7.6-6.7 7.7 6.6"/>' +
-      '<path d="M6.5 10.1l-.1 9.6 11.3-.1-.1-9.5"/>' +
-      '<path d="M15.6 7.7V5.2l1.8.1v3.8"/>' +
-      '<path d="M8.4 12.4l2.4-.1.1 2.3-2.5.1z"/>' +
-      '<path d="M13 19.6v-4.4c0-.6.4-1 1-1h.8c.6 0 1 .4 1 1v4.4z" fill="rgb(var(--sun))"/>'),
-    // Outside: a flower with petals, stem, leaf and ground line; the yellow centre.
-    outside: catSvg(
-      '<path d="M12 11.4c-.2 2.9.1 5.6.3 8.4"/>' +
-      '<path d="M12.2 17c1.2-1.9 2.9-2.6 4.6-2.2-.6 1.8-2.4 2.7-4.6 2.2z"/>' +
-      '<path d="M12 3.4c1.1 0 1.9.8 1.9 1.8M14.4 5.6c1.3-.5 2.5.3 2.5 1.6 0 1-.8 1.6-1.6 1.7M15.8 9.4c.7 1.1.3 2.4-.9 2.8-.9.3-1.7-.1-2.1-.8M11.6 11.5c-.6.9-1.8 1.1-2.7.4-.8-.6-.8-1.6-.3-2.4M8.2 8.8c-1.2-.3-1.8-1.4-1.3-2.5.4-.9 1.5-1.2 2.4-.9M9.6 5.1c.2-1 1.1-1.7 2.4-1.7"/>' +
-      '<path d="M12.1 6.8c.8 0 1.4.6 1.4 1.4s-.7 1.4-1.5 1.4-1.4-.6-1.4-1.4.7-1.4 1.5-1.4z" fill="rgb(var(--sun))"/>' +
-      '<path d="M8 20.2c2.7-.4 5.3-.4 8 0"/>'),
-    // Things we do: a waving hand with wave lines; the sun-yellow cuff.
-    actions: catSvg(
-      '<path d="M7.4 11.9V6.3c0-.8.6-1.4 1.4-1.4.8 0 1.4.7 1.4 1.5v4.3"/>' +
-      '<path d="M10.2 10.6V5c0-.8.6-1.4 1.4-1.4.8 0 1.4.6 1.4 1.4v5.8"/>' +
-      '<path d="M13 10.8V6.9c0-.8.6-1.4 1.4-1.4.8 0 1.4.6 1.4 1.4v7.7c0 3.6-2.4 6-5.8 6-1.6 0-2.8-.4-3.7-1.1"/>' +
-      '<path d="M7.4 11.9l-.9-1c-.6-.6-1.6-.6-2.1.1-.4.6-.3 1.3.1 1.9l2.3 3.2"/>' +
-      '<path d="M5.4 17.6l1.9-1.8 2.2 2.4-1.9 1.8z" fill="rgb(var(--sun))"/>' +
-      '<path d="M18.4 4.6c.9.7 1.5 1.7 1.7 2.9M19.7 2.9c1.4 1 2.2 2.4 2.4 4"/>'),
-    // Everything else: a speech bubble; a sun-yellow heart inside.
-    words: catSvg(
-      '<path d="M6.6 4.1l10.9-.1c1.5 0 2.6 1.1 2.6 2.6l-.1 6.8c0 1.5-1.1 2.6-2.6 2.6h-5.3l-4.7 4.1.1-4.1h-.9C5.1 16 4 14.9 4 13.4l.1-6.7c0-1.5 1-2.6 2.5-2.6z"/>' +
-      '<path d="M12 13.2c-2-1.3-3.1-2.4-3.1-3.6 0-.9.7-1.6 1.5-1.6.7 0 1.2.4 1.6 1 .4-.6.9-1 1.6-1 .8 0 1.5.7 1.5 1.6 0 1.2-1.1 2.3-3.1 3.6z" fill="rgb(var(--sun))"/>'),
-  };
-  function catIcon(entry) {
-    return CATS[entry.category] || CATS.words;
-  }
-
+  // Categories are inferred from entry labels, including Spanish.
   // Phrases checked whole first, then single words. Order inside the lists
   // does not matter; the first category whose list matches wins.
   var CAT_PHRASES = {
@@ -315,6 +231,8 @@
     child: null,
     languages: [],
     entries: [],
+    page: ['insights', 'profile', 'log'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'words',
+    search: '', filter: '',
     tab: null, // null shows the kind cards; 'word' | 'sound' | 'sign' shows that kind's list
     sessionLangs: [], // languages created this session, still unused
     quickPick: {}, // quick-start picks: item id -> true
@@ -436,7 +354,7 @@
     return '' +
 '<main data-screen="error" class="mx-auto w-full max-w-md px-4 py-10">' +
 '  <div class="state-error">' +
-'    <p class="text-body font-medium">Couldn’t load ' + who + ' firsts.</p>' +
+'    <p class="text-body font-medium">Couldn’t load ' + who + ' entries.</p>' +
 '    <p class="text-body text-muted">Nothing you saved is lost. Check your connection and try again.</p>' +
 '    <button type="button" id="retry" class="btn-secondary mt-2">Retry</button>' +
 '  </div>' +
@@ -448,7 +366,7 @@
     return '' +
 '<main data-screen="setup" class="mx-auto w-full max-w-md px-4 py-10">' +
 '  <h1 class="font-rounded text-title">Start tracking</h1>' +
-'  <p class="mt-1 text-body text-muted">Tell Rilo whose firsts these are. The birth month is what lets every first show how old the child was.</p>' +
+'  <p class="mt-1 text-body text-muted">Tell Rilo whose words these are. The birth month lets every entry show how old the child was.</p>' +
 '  <form id="setup-form" class="mt-6 flex flex-col gap-4" novalidate>' +
 '    <div>' +
 '      <label class="mb-1 block text-small font-medium" for="setup-name">Name</label>' +
@@ -471,7 +389,7 @@
   }
 
   // The quick start, straight after setup: tap what the child already does,
-  // save them all dated today, or skip and add firsts one at a time.
+  // save them all dated today, or skip and add entries one at a time.
   function quickstartHtml() {
     var name = state.child.name;
     var n = Object.keys(state.quickPick).length;
@@ -501,115 +419,135 @@
 '<div class="bar un-safe-bottom"><div class="mx-auto w-full max-w-md px-4 pb-4 pt-3">' +
 '  <div class="flex gap-2">' +
 '    <button type="button" id="quick-add" class="btn-primary flex-1"' + (n ? '' : ' disabled') + '>' +
-      (n ? (n === 1 ? 'Add 1 first' : 'Add ' + n + ' firsts') : 'Add firsts') + '</button>' +
+      (n ? (n === 1 ? 'Add 1 entry' : 'Add ' + n + ' entries') : 'Add entries') + '</button>' +
 '    <button type="button" id="quick-skip" class="btn-secondary">Skip</button>' +
 '  </div>' +
 '</div></div>';
   }
 
-  function mainHtml() {
-    var name = state.child.name;
-    var monthsToday = ageMonths(state.child.birthday, todayIso());
-    var n = state.entries.length;
-    var countLine = '';
-    if (n) {
-      var langs = languagesUsed();
-      countLine = n + (n === 1 ? ' first' : ' firsts') +
-        (langs ? ' in ' + langs + (langs === 1 ? ' language' : ' languages') : '');
-    }
-    return '' +
-'<main data-screen="app" class="mx-auto w-full max-w-md px-4 pb-32 pt-4">' +
-'  <header>' +
-'    <div class="flex items-start justify-between gap-3">' +
-'      <div class="min-w-0">' +
-'        <h1 class="font-rounded text-title">' + esc(name) + "'s firsts</h1>" +
-'        <p class="mt-0.5 text-body text-muted">' + esc(formatAge(monthsToday, name)) + ' today</p>' +
-'      </div>' +
-'      <button type="button" id="edit-child" class="btn-secondary" aria-label="Edit ' + esc(name) + "'s name and birth month\">" + ICON_PENCIL +
-'      </button>' +
-'    </div>' +
-    (countLine
-      ? '<p class="mt-2 flex flex-wrap items-center gap-2 text-small text-muted">' +
-        (state.child.is_demo ? '<span class="tag">Staging demo</span>' : '') +
-        '<span>' + countLine + '</span></p>'
-      : '') +
-'  </header>' +
-'  ' + (state.tab
-      ? kindHeadHtml() + '<div id="firsts-area">' + listHtml() + '</div>'
-      : cardsHtml()) +
-'</main>' +
-'<div class="bar un-safe-bottom"><div class="mx-auto w-full max-w-md px-4 pb-4 pt-3">' +
-'  <button type="button" id="add-first" class="btn-primary w-full">' + ICON_PLUS + 'Add a first</button>' +
-'</div></div>';
+  // Editorial screens share the existing record forms and API.
+  var ART = {
+    sun: '<path d="M31 18c18-2 31 11 30 28S46 73 30 70 5 56 7 40 15 20 31 18Z"/><path d="M22 35v2m21-2v2m-10 2-2 6 4 1m-15 5c6 9 16 10 24 0"/><g stroke="rgb(var(--sun))" stroke-width="7"><path d="M17 45h1m28 1h1"/></g><path d="M34 10c-5-4 4-6 0-11M49 13c1-7 7-5 7-12M62 24c7 0 7-7 14-7M67 39c6-4 9 1 15-2M65 55c8-3 9 4 16 2M56 66c7 3 4 9 11 12M42 75c6 5 0 9 3 15M26 75c-5 6 2 8-2 15M13 69c-6 2-4 8-10 9M4 56c-7 4-9-2-14 1M0 40c-7-4-9 1-14-3M6 24c-8 0-6-8-13-8M20 13c-7-1-3-8-7-12"/>',
+    bottle: '<path d="M29 17c-1-7 1-14 5-14 5 0 5 6 4 10l5 8M25 26c-8 13-13 33-12 47 1 8 7 10 22 10s22-3 22-10c1-20-3-36-12-48M17 39c12 5 26 5 36 0"/><path d="M24 25c7 3 15 3 23-1" stroke="rgb(var(--sun))" stroke-width="10"/>',
+    duck: '<path d="M43 20c-13-2-23 7-23 19 0 5 2 10 1 13-9 1-21-13-25-5-3 13 9 31 30 33 21 2 38-10 38-24 0-9-12-10-12-20 0-8-4-14-9-16Z"/><path d="m54 38 19 2-15 9" fill="rgb(var(--sign))"/><path d="M42 34v1"/>',
+    hand: '<path d="M29 79 12 60c-5-6-1-12 5-9l9 8-11-31c-3-8 4-11 7-4l8 20-6-32c-1-7 6-9 8-1l5 31 1-34c0-8 7-9 8 0l1 34 6-27c2-7 8-5 7 2l-4 34 7-12c5-7 11-2 7 5L57 70l-2 11"/><path d="M78 18c7 7 10 18 6 27M88 11c10 10 14 24 9 37" stroke="rgb(var(--sign))"/>',
+    sprout: '<path d="M37 79V49c-1-22 7-35 21-42 8 17-1 35-21 42M37 57C17 58 6 45 6 28c20-3 34 7 31 29M22 81c10-5 20-3 30 0"/><path d="M9 67 0 70m64-47 9-7" stroke="rgb(var(--sun))"/>',
+    star: '<path d="m35 5 10 26 28 3-21 19 6 28-24-14-24 14 5-29L-4 34l28-3Z" fill="rgb(var(--sun))"/>',
+    apple: '<path d="M33 29C8 14-7 36 0 57c7 27 22 31 32 23 13 9 28 2 35-24 6-22-13-36-34-27Z" fill="rgb(var(--fruit))"/><path d="M33 29c-1-11-4-16-9-22m9 19c0-15 8-21 20-22-1 13-8 21-20 22"/>',
+    car: '<path d="M1 63V48c0-8 5-12 13-12h6l10-19c4-7 24-7 31 0l11 19h8c10 0 15 5 15 15v12Z" fill="rgb(var(--sign-soft))"/><path d="M44 15v21m-23 0h52"/><circle cx="22" cy="64" r="10" fill="rgb(var(--surface))"/><circle cx="75" cy="64" r="10" fill="rgb(var(--surface))"/>',
+    bubble: '<path d="M10 16C28 0 64 5 72 28c9 25-15 43-40 38L12 79l2-20C-1 48-4 30 10 16Z"/>',
+    book: '<path d="M40 24C25 9 9 10 0 14v57c13-5 28-3 40 9 11-12 26-14 40-9V14c-14-5-27-1-40 10Zm0 0v55"/>',
+    bars: '<path d="M12 75V48m27 27V12m28 63V32"/>',
+    profile: '<circle cx="40" cy="25" r="16"/><path d="M12 76c0-32 56-32 56 0Z"/>',
+  };
+  function art(name, text) {
+    var shape = ART[name] || ART.bubble;
+    return '<svg class="illustration" viewBox="-18 -10 120 110" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + shape + (text ? '<text x="36" y="43" text-anchor="middle" fill="currentColor" stroke="none" font-size="22" font-family="sans-serif">' + esc(text) + '</text>' : '') + '</svg>';
   }
-
-  // The main screen's opening view: one card per kind of first — Words wide
-  // on top, Sounds and Signs side by side — with its count and its latest
-  // first. Tapping one opens that kind's list (the reference layout).
+  function entryArt(e) {
+    if (e.kind === 'sign') return art('hand');
+    if (e.kind === 'sound') return art(e.category === 'transport' ? 'car' : 'duck');
+    return art({ food: 'bottle', transport: 'car', play: 'book', actions: 'hand', outside: 'sprout', animals: 'duck' }[e.category] || 'bubble');
+  }
+  function latest(kind) { return state.entries.filter(function(e) { return e.kind === kind; }).sort(function(a,b) { return b.said_on.localeCompare(a.said_on) || b.id-a.id; })[0]; }
+  function navigate(page, kind, filter) {
+    state.page = page; state.tab = kind || null; state.filter = filter || ''; state.search = '';
+    if (location.hash !== '#' + page) history.replaceState(null, '', location.pathname + location.search + '#' + page);
+    render(); window.scrollTo({ top: 0 });
+    var title = app.querySelector('h1'); if (title) title.focus({ preventScroll: true });
+  }
+  function navHtml() {
+    return '<nav class="bottom-nav" aria-label="Main navigation">' +
+      '<button data-page="words"' + (state.page === 'words' || state.page === 'log' ? ' aria-current="page"' : '') + '>' + art('book') + '<span>Words</span></button>' +
+      '<button data-page="insights"' + (state.page === 'insights' ? ' aria-current="page"' : '') + '>' + art('bars') + '<span>Insights</span></button>' +
+      '<button id="add-first" class="nav-add" aria-label="Add a word, sound or sign">' + ICON_PLUS + '</button>' +
+      '<button data-page="profile"' + (state.page === 'profile' ? ' aria-current="page"' : '') + '>' + art('profile') + '<span>Profile</span></button></nav>';
+  }
+  function mainHtml() {
+    var content = state.page === 'insights' ? insightsHtml() : state.page === 'profile' ? profileHtml() : state.page === 'log' ? logHtml() : homeHtml();
+    return '<main data-screen="app" class="editorial-main" data-page="' + state.page + '">' + content + '</main>' + navHtml();
+  }
+  function headerHtml(title, subtitle, edit) {
+    return '<header class="page-header"><div><h1 tabindex="-1">' + esc(title) + '</h1><p>' + esc(subtitle) + '</p></div>' + (edit ? '<button id="edit-child" class="edit-profile" aria-label="Edit child profile">' + ICON_PENCIL + '</button>' : '') + '</header>';
+  }
+  function homeHtml() {
+    var last = latest('word');
+    return headerHtml(state.child.name + '’s words', formatAge(ageMonths(state.child.birthday, todayIso()), state.child.name) + ' today', true) +
+      '<section class="word-hero tone-butter" aria-label="Total spoken words"><div><strong class="hero-count">' + countKind('word') + '</strong><h2>total words</h2><p>' + (last ? 'latest: ' + esc(last.label) + ' · ' + esc(fmtShort(last.said_on)) : 'A little word, a big beginning') + '</p></div><div class="hero-sun">' + art('sun') + '</div></section>' + cardsHtml() +
+      '<section class="recent-section"><div class="section-heading"><h2>Recent words</h2><button data-log="all">See all <span aria-hidden="true">›</span></button></div>' +
+      (state.entries.length ? '<ul class="list recent-list">' + state.entries.slice().sort(function(a,b) { return b.said_on.localeCompare(a.said_on) || b.id-a.id; }).slice(0,5).map(rowHtml).join('') + '</ul>' : '<div class="state-empty"><p>Your word story starts here.</p><button class="btn-primary" data-add-kind="word">Add a word</button></div>') + '</section>';
+  }
   function cardsHtml() {
-    var cards = [
-      { key: 'word', wide: true },
-      { key: 'sound' },
-      { key: 'sign' },
-    ];
-    return '<div class="kind-grid mt-4">' + cards.map(function (c) {
-      var k = KINDS[c.key];
-      var latest = state.entries.find(function (e) { return e.kind === c.key; });
-      var blkClass = { word: 'blk-lg blk-word', sound: 'blk-lg blk-sound', sign: 'blk-lg blk-sign' }[c.key];
-      var sub = latest
-        ? 'Latest: ' + esc(latest.label) + ', ' + esc(fmtShort(latest.said_on))
-        : k.empty;
-      var aria = k.many + ', ' + countKind(c.key) +
-        (latest ? ', latest ' + latest.label + ', ' + fmtLong(latest.said_on) : ', none yet');
-      return '<button type="button" class="kind-card' + (c.wide ? ' col-span-2' : '') +
-        '" data-kind-card="' + c.key + '" aria-label="' + esc(aria) + '">' +
-'  <span class="flex items-start justify-between">' +
-'    <span class="blk ' + blkClass + '" aria-hidden="true">' + CATS[k.icon] + '</span>' +
-'    <span class="font-rounded text-title">' + countKind(c.key) + '</span>' +
-'  </span>' +
-'  <span class="block">' +
-'    <span class="block font-rounded text-heading">' + k.many + '</span>' +
-'    <span class="block text-small text-muted">' + sub + '</span>' +
-'  </span>' +
-'</button>';
+    return '<div class="kind-grid">' + ['word','sound','sign'].map(function(kind) {
+      var last = latest(kind);
+      return '<button class="kind-card tone-' + kind + '" data-kind-card="' + kind + '">' + art({word:'bottle',sound:'duck',sign:'hand'}[kind]) + '<strong>' + countKind(kind) + '</strong><h2>' + KINDS[kind].many + '</h2><p>Latest: ' + (last ? esc(last.label) : 'Not yet') + '</p></button>';
     }).join('') + '</div>';
   }
-
-  // The heading above a kind's list: back to the cards, then the kind's name
-  // and count.
-  function kindHeadHtml() {
-    var k = KINDS[state.tab];
-    var n = countKind(state.tab);
-    return '' +
-'<button type="button" id="back-to-cards" class="btn-secondary mt-4">' +
-'  <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>' +
-'All firsts</button>' +
-'<div class="flex items-baseline justify-between px-1 pb-2 pt-6">' +
-'  <h2 class="font-rounded text-title">' + k.many + '</h2>' +
-'  <span class="text-small text-muted">' + n + ' ' + (n === 1 ? k.unit[0] : k.unit[1]) + '</span>' +
-'</div>';
+  function selectedEntries() {
+    return state.entries.filter(function(e) {
+      return (!state.tab || e.kind === state.tab) &&
+        (!state.search || (e.label + ' ' + (e.sounds_like || '') + ' ' + (e.language_name || '')).toLowerCase().includes(state.search.toLowerCase())) &&
+        (state.filter !== 'mastered' || (e.kind === 'word' && e.mastered === true)) &&
+        (state.filter !== 'month' || e.said_on.slice(0,7) === todayIso().slice(0,7)) &&
+        (!state.filter.startsWith('language:') || (e.kind === 'word' && (e.language_name || 'Not assigned').toLowerCase() === state.filter.slice(9).toLowerCase()));
+    }).sort(function(a,b) { return b.said_on.localeCompare(a.said_on) || b.id-a.id; });
   }
-
+  function logHtml() {
+    return headerHtml(state.tab ? KINDS[state.tab].many : 'Word collection', state.filter ? (state.filter === 'mastered' ? 'Mastered spoken words' : state.filter === 'month' ? 'Entries learned this month' : 'Spoken words · ' + state.filter.slice(9)) : 'Every little way to communicate', false) +
+      '<button class="btn-secondary" data-page="words">‹ Back to words</button><label class="sr-only" for="word-search">Search entries</label><input id="word-search" class="field log-search" type="search" placeholder="Search words, sounds or signs" value="' + esc(state.search) + '">' +
+      '<div class="log-filters" aria-label="Filter entries">' + ['all','word','sound','sign'].map(function(kind) { return '<button class="chip ' + ((state.tab || 'all') === kind ? 'chip-on' : '') + '" data-log="' + kind + '" aria-pressed="' + ((state.tab || 'all') === kind) + '">' + (kind === 'all' ? 'All' : KINDS[kind].many) + '</button>'; }).join('') + (state.filter ? '<button class="chip" data-clear-filter>Clear insight filter</button>' : '') + '</div><div id="firsts-area" aria-live="polite">' + listHtml() + '</div>';
+  }
   function listHtml() {
-    var rows = state.entries.filter(function (e) { return e.kind === state.tab; });
-    if (!rows.length) return emptyHtml();
-    var map = new Map();
-    rows.forEach(function (e) {
-      var age = ageMonths(state.child.birthday, e.said_on);
-      if (!map.has(age)) map.set(age, []);
-      map.get(age).push(e);
-    });
-    return Array.from(map.keys()).sort(function (a, b) { return b - a; }).map(function (age) {
-      var g = map.get(age);
-      return '' +
-'<section>' +
-'  <div class="flex items-baseline justify-between px-1 pb-2 pt-6">' +
-'    <h2 class="font-rounded text-heading">' + esc(formatAge(age, state.child.name)) + '</h2>' +
-'    <span class="text-small text-muted">' + (g.length === 1 ? '1 first' : g.length + ' firsts') + '</span>' +
-'  </div>' +
-'  <ul class="list">' + g.map(rowHtml).join('') + '</ul>' +
-'</section>';
-    }).join('');
+    var rows = selectedEntries();
+    if (!rows.length) return '<div class="state-empty"><p>No matching entries.</p><p class="text-muted">Try another filter or add something new.</p><button class="btn-primary" data-add-kind="' + (state.tab || 'word') + '">Add an entry</button></div>';
+    var groups = new Map();
+    rows.forEach(function(e) { var age = ageMonths(state.child.birthday,e.said_on); if (!groups.has(age)) groups.set(age,[]); groups.get(age).push(e); });
+    return Array.from(groups.keys()).sort(function(a,b) { return b-a; }).map(function(age) { var group=groups.get(age); return '<section><div class="age-heading"><h2>' + esc(formatAge(age,state.child.name)) + '</h2><span>' + group.length + (group.length === 1 ? ' entry' : ' entries') + '</span></div><ul class="list">' + group.map(rowHtml).join('') + '</ul></section>'; }).join('');
+  }
+  function chartHtml(months) {
+    var shown = months.slice(-12), max = Math.max(4, ...shown.map(function(m) { return m.count; })), top = Math.ceil(max/4)*4;
+    var points = shown.map(function(m,i) { return { x: 40+i*410/(shown.length-1), y: 145-m.count*120/top, m:m }; });
+    var line = points.map(function(p) { return p.x + ',' + p.y; }).join(' ');
+    var marks = [0,1,2,3,4].map(function(i) { var y=145-i*30; return '<text x="27" y="' + (y+4) + '" text-anchor="end">' + (top*i/4) + '</text>'; }).join('');
+    return '<svg class="growth-chart" viewBox="0 0 480 190" role="img" aria-labelledby="chart-title chart-desc"><title id="chart-title">New spoken words learned each month</title><desc id="chart-desc">' + esc(shown.map(function(m) { return m.key + ': ' + m.count; }).join('; ')) + '</desc><defs><linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgb(var(--sign))" stop-opacity=".28"/><stop offset="100%" stop-color="rgb(var(--sign))" stop-opacity=".04"/></linearGradient></defs>' + marks + '<path class="chart-axis" d="M40 25V145H470"/><polygon points="40,145 ' + line + ' 450,145" fill="url(#chart-fill)"/><polyline points="' + line + '" fill="none" stroke="rgb(var(--accent))" stroke-width="2.7"/>' + points.map(function(p,i) { var label=MONTH_NAMES[Number(p.m.key.slice(5))-1].slice(0,3); return '<circle cx="' + p.x + '" cy="' + p.y + '" r="4.5" fill="rgb(var(--accent))"/><text class="chart-value" x="' + p.x + '" y="' + (p.y-10) + '" text-anchor="middle">' + p.m.count + '</text>' + (shown.length<=6 || i%2===0 || i===shown.length-1 ? '<text x="' + p.x + '" y="168" text-anchor="middle">' + label + '</text>' : ''); }).join('') + '</svg><details class="chart-table"><summary>Monthly word counts' + (months.length>12 ? ' · full history' : '') + '</summary><table><thead><tr><th>Month</th><th>New words</th></tr></thead><tbody>' + months.map(function(m) { return '<tr><td>' + m.key + '</td><td>' + m.count + '</td></tr>'; }).join('') + '</tbody></table></details>';
+  }
+  function statCard(n,label,icon,tone,filter,wide) {
+    return '<button class="stat-card tone-' + tone + (wide ? ' stat-wide' : '') + '" data-insight-filter="' + esc(filter) + '">' + art(icon, icon === 'bubble' ? label === 'English' ? 'EN' : label === 'Spanish' ? 'ES' : label.slice(0,2).toUpperCase() : '') + '<div><strong>' + n + '</strong><h3>' + esc(label) + '</h3><p>' + (label === 'Signs' ? 'Signs logged' : label === 'Sounds' ? 'Sounds logged' : 'Words') + '</p></div></button>';
+  }
+  var SUGGESTIONS = [
+    { title: 'Everyday words', sub: 'Foods, toys, favorite things', icon:'apple', tone:'word', kind:'word', detail: 'Name something your child is looking at during meals or play. Pause so they can respond, then repeat their attempt naturally. Try one familiar word in each language your family uses.' },
+    { title: 'Sound imitation', sub: 'Animals, vehicles, environmental sounds', icon:'car', tone:'sound', kind:'sound', detail: 'Take turns making a favorite animal or vehicle sound. Try a playful moo, woof or vroom with a toy or picture. Leave a pause for your child to join in and follow their interests.' },
+    { title: 'Simple gestures', sub: 'Signs for more, help, all done', icon:'hand', tone:'sign', kind:'sign', detail: 'Pair a familiar gesture with a spoken word in your everyday routine. Model more or all done at snack time without asking your child to perform. Respond to any way they choose to communicate.' },
+  ];
+  function suggestionsHtml() {
+    return '<div class="suggestion-grid">' + SUGGESTIONS.map(function(s,i) { return '<button class="suggestion-card tone-' + s.tone + '" data-suggestion="' + i + '">' + art(s.icon) + '<h3>' + s.title + '</h3><p>' + s.sub + '</p></button>'; }).join('') + '</div>';
+  }
+  function insightsHtml() {
+    var data = window.RiloInsights.summarize(state.entries,todayIso());
+    var english=data.languages.find(function(l) {return /^(english|en|inglés|ingles)$/i.test(l.name);});
+    var spanish=data.languages.find(function(l) {return /^(spanish|es|español|espanol)$/i.test(l.name);});
+    var other=data.languages.filter(function(l) {return l!==english && l!==spanish;});
+    var monthWords=data.thisMonth.filter(function(e) { return e.kind==='word'; }).length;
+    var monthSigns=data.thisMonth.filter(function(e) { return e.kind==='sign'; }).length;
+    var monthSounds=data.thisMonth.filter(function(e) { return e.kind==='sound'; }).length;
+    return headerHtml('Word insights','A look at ' + state.child.name + '’s language growth',false) +
+      '<section class="growth-card tone-butter"><div class="growth-heading"><div><h2>Growth over time</h2><p>New words learned each month</p></div>' + art('sprout') + '</div>' + chartHtml(data.months) + '</section>' +
+      '<div class="insight-primary">' + statCard(english ? english.count : 0,'English','bubble','word','language:' + (english ? english.name : 'English')) + statCard(spanish ? spanish.count : 0,'Spanish','bubble','sound','language:' + (spanish ? spanish.name : 'Spanish')) + statCard(data.counts.sign,'Signs','hand','sign','sign') + '</div>' +
+      (other.length ? '<div class="other-languages">' + other.map(function(l) {return statCard(l.count,l.name,'bubble','sound','language:' + l.name,true);}).join('') + '</div>' : '') +
+      '<div class="insight-secondary">' + statCard(data.counts.sound,'Sounds','duck','sign','sound',true) + statCard(data.counts.mastered,'Mastered','star','butter','mastered',true) + '</div>' +
+      '<section><div class="section-heading"><h2>What to try next</h2><button data-suggestion="all">See all <span aria-hidden="true">›</span></button></div>' + suggestionsHtml() + '</section>' +
+      '<section class="month-section"><h2>This month</h2><div class="month-list tone-butter">' + [ [monthWords + ' new spoken ' + (monthWords===1?'word':'words'),'bars','word'],[monthSounds + ' new ' + (monthSounds===1?'sound':'sounds'),'duck','sound'],[monthSigns + ' new ' + (monthSigns===1?'sign':'signs'),'hand','sign'] ].map(function(row) { return '<button data-month-kind="' + row[2] + '">' + art(row[1]) + '<span>' + row[0] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div></section>';
+  }
+  function profileHtml() {
+    return headerHtml('Profile', 'A little about ' + state.child.name, false) + '<section class="profile-card tone-butter">' + art('sun') + '<h2>' + esc(state.child.name) + '</h2><p>' + esc(formatAge(ageMonths(state.child.birthday,todayIso()),state.child.name)) + ' today</p><p>Born ' + esc(MONTH_NAMES[Number(state.child.birthday.slice(5,7))-1]) + ' ' + esc(state.child.birthday.slice(0,4)) + '</p><button id="edit-child" class="btn-primary">Edit child profile</button></section><section class="profile-about"><h2>Your language story</h2><p>' + state.entries.length + ' entries · ' + languagesUsed() + ' languages</p><p>Spoken words, sounds and signs are tracked separately. A mastered word is one you have marked as mastered.</p><button class="btn-secondary" data-page="insights">View word insights</button></section>';
+  }
+  function openSuggestion(value) {
+    var choices = value === 'all' ? SUGGESTIONS : [SUGGESTIONS[Number(value)]];
+    var content = document.createElement('div'); content.className='suggestion-sheet p-5';
+    content.innerHTML = '<h2 class="font-rounded text-title">' + (value === 'all' ? 'What to try next' : choices[0].title) + '</h2><p class="text-muted mt-2">Small play ideas to follow your child’s interests.</p>' + choices.map(function(s) { return '<section class="mt-5"><h3 class="font-rounded text-heading">' + s.title + '</h3><p class="text-body mt-2">' + s.detail + '</p><button class="btn-secondary mt-3" data-play-add="' + s.kind + '">Log a ' + s.kind + '</button></section>'; }).join('') + '<button class="btn-primary mt-5 w-full" data-close-play>Done</button>';
+    var sheet=presentSheet(content);
+    content.querySelector('[data-close-play]').addEventListener('click',function() {sheet.dismiss();});
+    content.querySelectorAll('[data-play-add]').forEach(function(b) {b.addEventListener('click',function() {sheet.dismiss();openEntrySheet(null,b.dataset.playAdd);});});
   }
 
   function rowHtml(e) {
@@ -634,61 +572,44 @@
     return '' +
 '<li class="list-row first-row p-0">' +
 '  <button type="button" class="row-btn" data-entry="' + e.id + '" aria-label="' + esc(aria) + '">' +
-'    <span class="blk ' + blkClass + '" aria-hidden="true">' + catIcon(e) + (e.mastered ? MAST_BADGE : '') + '</span>' +
+'    <span class="blk ' + blkClass + '" aria-hidden="true">' + entryArt(e) + (e.mastered ? MAST_BADGE : '') + '</span>' +
 '    <span class="min-w-0 flex-1">' +
-'      <span class="block truncate text-body font-semibold">' + esc(e.label) + '</span>' +
-      sub +
+'      <span class="entry-title block truncate">' + esc(e.label) + '</span>' +
+      '<span class="type-pill tone-' + e.kind + '">' + k.one + '</span>' + sub +
 '    </span>' +
 '    <span class="flex-none text-right text-small text-muted">' +
 '      <span class="block">' + esc(fmtShort(e.said_on)) + '</span>' +
     (e.language_name ? '<span class="block">' + esc(e.language_name) + '</span>' : '') +
-'    </span>' +
+'    </span><span class="row-chevron" aria-hidden="true">›</span>' +
 '  </button>' +
 '</li>';
   }
 
-  function emptyHtml() {
-    // The three cards at 0 stand in for the old "No firsts yet." state; this
-    // per-kind empty state only shows inside a kind's list.
-    var k = KINDS[state.tab];
-    return '' +
-'<div class="state-empty mt-6">' +
-'  <p class="text-body font-medium">' + esc(k.empty) + '</p>' +
-'  <button type="button" class="btn-primary mt-2" data-add-kind="' + state.tab + '">' + ICON_PLUS + esc(k.add) + '</button>' +
-'</div>';
-  }
-
   // ── Events on the rendered screen ─────────────────────────────────────
   function bind() {
+    app.querySelectorAll('button[data-page]').forEach(function(btn) { btn.addEventListener('click',function() {navigate(btn.dataset.page);}); });
+    app.querySelectorAll('[data-log]').forEach(function(btn) { btn.addEventListener('click',function() {navigate('log',btn.dataset.log==='all' ? null : btn.dataset.log);}); });
+    app.querySelectorAll('[data-insight-filter]').forEach(function(btn) { btn.addEventListener('click',function() {var f=btn.dataset.insightFilter; navigate('log', ['sign','sound'].includes(f) ? f : 'word', ['sign','sound'].includes(f) ? '' : f);}); });
+    app.querySelectorAll('[data-month-kind]').forEach(function(btn) { btn.addEventListener('click',function() {navigate('log',btn.dataset.monthKind,'month');}); });
+    app.querySelectorAll('[data-suggestion]').forEach(function(btn) {btn.addEventListener('click',function() {openSuggestion(btn.dataset.suggestion);});});
+    var search=app.querySelector('#word-search');
+    if(search) search.addEventListener('input',function() {state.search=search.value;app.querySelector('#firsts-area').innerHTML=listHtml();bindEntryRows();});
+    var clear=app.querySelector('[data-clear-filter]');
+    if(clear) clear.addEventListener('click',function() {state.filter='';render();});
     var retry = app.querySelector('#retry');
     if (retry) retry.addEventListener('click', loadState);
 
     var setupForm = app.querySelector('#setup-form');
     if (setupForm) setupForm.addEventListener('submit', onSetupSubmit);
 
-    app.querySelectorAll('[data-kind-card]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        state.tab = btn.getAttribute('data-kind-card');
-        render();
-        window.scrollTo({ top: 0 });
-        var head = app.querySelector('#back-to-cards');
-        if (head) head.focus({ preventScroll: true });
-      });
-    });
-
-    var backToCards = app.querySelector('#back-to-cards');
-    if (backToCards) backToCards.addEventListener('click', function () {
-      var kind = state.tab;
-      state.tab = null;
-      render();
-      var card = app.querySelector('[data-kind-card="' + kind + '"]');
-      if (card) card.focus({ preventScroll: true });
+    app.querySelectorAll('[data-kind-card]').forEach(function(btn) {
+      btn.addEventListener('click',function() {navigate('log',btn.dataset.kindCard);});
     });
 
     var addFirst = app.querySelector('#add-first');
     if (addFirst) addFirst.addEventListener('click', function () { openEntrySheet(null); });
     app.querySelectorAll('[data-add-kind]').forEach(function (btn) {
-      btn.addEventListener('click', function () { openEntrySheet(null, btn.getAttribute('data-add-kind')); });
+      btn.onclick = function () { openEntrySheet(null, btn.getAttribute('data-add-kind')); };
     });
 
     var quickAdd = app.querySelector('#quick-add');
@@ -710,18 +631,20 @@
     var editChild = app.querySelector('#edit-child');
     if (editChild) editChild.addEventListener('click', openChildSheet);
 
-    app.querySelectorAll('[data-entry]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var id = Number(btn.getAttribute('data-entry'));
-        var entry = state.entries.find(function (e) { return e.id === id; });
-        if (entry) openEntrySheet(entry);
-      });
+    bindEntryRows();
+  }
+  function bindEntryRows() {
+    app.querySelectorAll('[data-entry]').forEach(function(btn) {
+      btn.onclick=function() {var entry=state.entries.find(function(e) {return e.id===Number(btn.dataset.entry);});if(entry) openEntrySheet(entry);};
+    });
+    app.querySelectorAll('#firsts-area [data-add-kind]').forEach(function(btn) {
+      btn.onclick=function() {openEntrySheet(null,btn.dataset.addKind);};
     });
   }
 
   function showFormError(el, err) {
     el.textContent = err && err.code === 'account_required'
-      ? 'Make an account to keep firsts.'
+      ? 'Make an account to keep entries.'
       : (err && err.message) || 'Something went wrong. Try again.';
     el.hidden = false;
   }
@@ -784,7 +707,7 @@
       state.entries = saved.entries || [];
       state.screen = 'app';
       render();
-      toast('Added ' + items.length + (items.length === 1 ? ' first' : ' firsts'));
+      toast('Added ' + items.length + (items.length === 1 ? ' entry' : ' entries'));
     } catch (err) {
       showFormError(errEl, err);
       button.disabled = false;
@@ -900,7 +823,7 @@
     function labels() {
       var k = KINDS[form.kind];
       var name = state.child.name;
-      content.querySelector('[data-kind-title]').textContent = isEdit ? 'Edit first' : 'Add a first';
+      content.querySelector('[data-kind-title]').textContent = isEdit ? 'Edit entry' : 'Add an entry';
       content.querySelector('[data-label-the]').textContent = k.the;
       content.querySelector('[data-label-input]').placeholder = k.eg;
       content.querySelector('[data-label-how]').innerHTML = esc(k.how(name)) +
@@ -946,7 +869,7 @@
             chips();
           } catch (err) {
             toast(err.code === 'account_required'
-              ? 'Make an account to keep firsts.'
+              ? 'Make an account to keep entries.'
               : (err.message || 'Could not add the language.'));
           }
         };
@@ -1050,7 +973,7 @@
       content.querySelector('[data-delete]').addEventListener('click', async function () {
         var ok = await confirmDialog(
           'Delete “' + entry.label + '”?',
-          'This removes it from ' + state.child.name + "'s firsts.");
+          'This removes it from ' + state.child.name + "'s entries.");
         if (!ok) return;
         try {
           await api('/api/entries/' + entry.id, { method: 'DELETE' });
@@ -1076,7 +999,7 @@
 '  <button type="button" class="min-h-11 px-1 font-medium text-fg" data-cancel>Cancel</button>' +
 '  <h2 class="absolute left-1/2 -translate-x-1/2 font-rounded text-heading" data-kind-title></h2>' +
 '</div>' +
-'<div class="seg grid-cols-3" role="radiogroup" aria-label="Kind of first">' +
+'<div class="seg grid-cols-3" role="radiogroup" aria-label="Entry type">' +
   kinds.map(function (kind) {
     return '<button type="button" role="radio" aria-checked="false" data-kind="' + kind + '" class="' +
       (form.kind === kind ? 'on' : '') + '">' +
@@ -1105,9 +1028,9 @@
 '<textarea id="entry-note" data-note class="field min-h-20" maxlength="280" placeholder="e.g. asked for it at bath time">' +
   (isEdit ? esc(entry.note || '') : '') + '</textarea>' +
 '<p data-form-error hidden class="mt-2 text-small text-danger"></p>' +
-'<button type="submit" class="btn-primary mt-4 w-full" data-save>' + (isEdit ? 'Save changes' : 'Add first') + '</button>' +
+'<button type="submit" class="btn-primary mt-4 w-full" data-save>' + (isEdit ? 'Save changes' : 'Add entry') + '</button>' +
     (isEdit
-      ? '<button type="button" class="btn-secondary mt-2 w-full text-danger" data-delete>Delete first</button>'
+      ? '<button type="button" class="btn-secondary mt-2 w-full text-danger" data-delete>Delete entry</button>'
       : '');
   }
 

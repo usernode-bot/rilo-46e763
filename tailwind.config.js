@@ -24,7 +24,7 @@ module.exports = {
 
   // Classes this app builds dynamically (if it ever does) go here, since the
   // extractor cannot see them. Prefer whole literals in the markup instead.
-  safelist: [],
+  safelist: ['tone-word', 'tone-sound', 'tone-sign'],
 
   // dark: variants key off a "dark" class on <html>, which public/index.html
   // sets from the viewer's Homeroom theme (the platform bridge reports it),
