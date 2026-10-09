@@ -98,3 +98,38 @@ test('acrossLanguages lists multi-language words once, newest first', () => {
   ], '2026-10-08');
   assert.deepEqual(alone.acrossLanguages, []);
 });
+test('an onboarding batch is a baseline, not new this week', () => {
+  const data = summarize([
+    { kind: 'word', said_on: '2026-10-09', already_learned: true, mastery: 'emerging' },
+    { kind: 'sound', said_on: '2026-10-09', already_learned: true, mastery: 'practicing' },
+    { kind: 'sign', said_on: '2026-10-09', already_learned: true, mastery: 'mastered' },
+    { kind: 'word', said_on: '2026-10-20', language_name: 'English', mastery: 'emerging' },
+  ], '2026-10-25');
+  // Growth starts at the onboarding month with no padding, and the chart
+  // counts only dated firsts: the batch is the baseline, never new.
+  assert.deepEqual(data.growth, [{ key: '2026-10', added: 1, baseline: 3, total: 1 }]);
+  assert.equal(data.alreadyLearned, 3);
+  // The batch stays in the totals, by language and mastery counts.
+  assert.equal(data.total, 4);
+  assert.equal(data.thisWeek, 1);
+  assert.equal(data.thisMonth.length, 1);
+  assert.deepEqual(data.mastery, { emerging: 2, practicing: 1, mastered: 1 });
+});
+test('later months grow from the baseline month', () => {
+  const data = summarize([
+    { kind: 'word', said_on: '2026-09-10', already_learned: true, mastery: 'practicing' },
+    { kind: 'word', said_on: '2026-09-20', already_learned: true, mastery: 'emerging' },
+    { kind: 'word', said_on: '2026-10-01', language_name: 'English', mastery: 'emerging' },
+  ], '2026-10-05');
+  assert.deepEqual(data.growth.map(m => [m.key, m.added, m.baseline, m.total]),
+    [['2026-09', 0, 2, 0], ['2026-10', 1, 0, 1]]);
+  assert.equal(data.alreadyLearned, 2);
+});
+test('a backdated first starts the chart earlier than onboarding', () => {
+  const data = summarize([
+    { kind: 'word', said_on: '2026-10-09', already_learned: true, mastery: 'emerging' },
+    { kind: 'word', said_on: '2026-08-15', language_name: 'English', mastery: 'emerging' },
+  ], '2026-10-25');
+  assert.deepEqual(data.growth.map(m => [m.key, m.added, m.baseline, m.total]),
+    [['2026-08', 1, 0, 1], ['2026-09', 0, 0, 1], ['2026-10', 0, 1, 1]]);
+});

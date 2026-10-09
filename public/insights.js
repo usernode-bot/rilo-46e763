@@ -36,14 +36,23 @@
     return Array.from(map.values()).map(function (g) {
       g.entries.sort(function (a, b) { return (a.id || 0) - (b.id || 0); });
       g.title = g.entries[0];
-      g.first_on = g.entries.reduce(function (min, e) {
+      // A card is "already learned" only when every language on it came from
+      // a quick-start pick; otherwise it is filed at its first dated language.
+      var datedEntries = g.entries.filter(function (e) { return e.already_learned !== true; });
+      g.already_learned = datedEntries.length === 0;
+      var pool = g.already_learned ? g.entries : datedEntries;
+      g.first_on = pool.reduce(function (min, e) {
         return e.said_on < min ? e.said_on : min;
-      }, g.entries[0].said_on);
+      }, pool[0].said_on);
       return g;
     });
   }
 
   function summarize(entries, today) {
+    // "Dated" firsts are the ones learned on a known day. Quick-start picks
+    // are flagged already_learned: they count in totals, languages and
+    // mastery, but never as something new learned this week or this month.
+    function dated(e) { return e.already_learned !== true; }
     var words = entries.filter(function (e) { return e.kind === 'word'; });
     var counts = { word: words.length, sound: 0, sign: 0, mastered: 0 };
     var languages = new Map();
@@ -63,24 +72,30 @@
     var months = [];
     for (var i = start; i <= end; i++) {
       var key = monthKey(i);
-      months.push({ key: key, count: words.filter(function (e) { return e.said_on.slice(0, 7) === key; }).length });
+      months.push({ key: key, count: words.filter(function (e) { return dated(e) && e.said_on.slice(0, 7) === key; }).length });
     }
 
     // Everything the child has: words, sounds and signs together. A word
     // with several languages is counted once, at the date its first language
     // was noticed.
-    // growth: each month's new entries and the running total at its end,
-    // from the first entry (at least seven months shown).
+    // growth: each month's new entries and the running total at its end.
+    // When the family onboarded with quick-start picks, growth starts in
+    // that first month with no padding before it, the chart counts only
+    // dated firsts (the onboarding month starts empty), and each month also
+    // carries how many were already learned there. Otherwise, at least
+    // seven months are shown, as before.
     var groups = groupConcepts(entries);
+    var anyLearned = groups.some(function (g) { return g.already_learned; });
     var firstAll = groups.reduce(function (min, g) { return g.first_on.slice(0, 7) < min ? g.first_on.slice(0, 7) : min; }, current);
-    var gStart = Math.min(end - 6, monthIndex(firstAll));
+    var gStart = anyLearned ? monthIndex(firstAll) : Math.min(end - 6, monthIndex(firstAll));
     var running = 0;
     var growth = [];
     for (var g = gStart; g <= end; g++) {
       var gKey = monthKey(g);
-      var added = groups.filter(function (c) { return c.first_on.slice(0, 7) === gKey; }).length;
+      var added = groups.filter(function (c) { return !c.already_learned && c.first_on.slice(0, 7) === gKey; }).length;
+      var baseline = groups.filter(function (c) { return c.already_learned && c.first_on.slice(0, 7) === gKey; }).length;
       running += added;
-      growth.push({ key: gKey, added: added, total: running });
+      growth.push({ key: gKey, added: added, baseline: baseline, total: running });
     }
 
     var byLanguage = new Map();
@@ -117,10 +132,11 @@
       });
 
     return { counts: counts, languages: Array.from(languages.values()), months: months,
-      thisMonth: entries.filter(function (e) { return e.said_on.slice(0, 7) === current; }),
+      thisMonth: entries.filter(function (e) { return dated(e) && e.said_on.slice(0, 7) === current; }),
       total: groups.length,
-      thisWeek: groups.filter(function (c) { return c.first_on >= weekStart && c.first_on <= today; }).length,
+      thisWeek: groups.filter(function (c) { return !c.already_learned && c.first_on >= weekStart && c.first_on <= today; }).length,
       growth: growth, byLanguage: languageList, mastery: mastery,
+      alreadyLearned: groups.filter(function (c) { return c.already_learned; }).length,
       acrossLanguages: acrossLanguages };
   }
 

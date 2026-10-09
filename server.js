@@ -211,7 +211,7 @@ const wrap = (fn) => (req, res, next) =>
 const ENTRY_SELECT = `
   SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id, e.concept_id,
          e.category, e.mastered, e.mastery, e.mastery_history,
-         e.said_on::text AS said_on, e.note, e.is_demo,
+         e.said_on::text AS said_on, e.note, e.is_demo, e.already_learned,
          l.name AS language_name
   FROM entries e LEFT JOIN languages l ON l.id = e.language_id
   WHERE e.id = $1 AND e.owner_id = $2`;
@@ -264,7 +264,7 @@ app.get('/api/state', wrap(async (req, res) => {
   const entries = await pool.query(
     `SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id, e.concept_id,
             e.category, e.mastered, e.mastery, e.mastery_history,
-            e.said_on::text AS said_on, e.note, e.is_demo,
+            e.said_on::text AS said_on, e.note, e.is_demo, e.already_learned,
             l.name AS language_name
      FROM entries e LEFT JOIN languages l ON l.id = e.language_id
      WHERE e.owner_id = $1
@@ -466,9 +466,12 @@ app.post('/api/entries', wrap(async (req, res) => {
 }));
 
 // The quick start onboarding: everything the child already does, tapped in
-// one go on the day the family started using Rilo. Each pick is saved as an
-// ordinary first dated today (server's today, the same slack as elsewhere),
-// with no language and no note — the parent can edit any of them later.
+// one go on the day the family started using Rilo. These are not firsts the
+// child learned today, so each row is flagged already_learned: it keeps the
+// day (for sorting and as the insights baseline month) but screens show
+// "Already learned" instead of a date. Each pick carries its own mastery
+// stage from the quick-start screen (default emerging). No language and no
+// note — the parent can edit any of them later.
 app.post('/api/quick-start', wrap(async (req, res) => {
   const ownerId = String(req.user.id);
   const items = Array.isArray(req.body.items) ? req.body.items : null;
@@ -496,7 +499,7 @@ app.post('/api/quick-start', wrap(async (req, res) => {
     if (label.length < 1 || label.length > 60) return null;
     const sounds_like = typeof item.sounds_like === 'string' ? item.sounds_like.trim() : '';
     if (sounds_like.length > 80) return null;
-    return [kind, label, sounds_like || null, validCategory(item.category)];
+    return [kind, label, sounds_like || null, validCategory(item.category), validMastery(item)];
   });
   if (values.some(function (v) { return v === null; })) {
     return res.status(400).json({ error: 'One of the picks is missing its word, animal or sign.' });
@@ -512,11 +515,11 @@ app.post('/api/quick-start', wrap(async (req, res) => {
         [ownerId, v[0]]);
       const inserted = await client.query(
         `INSERT INTO entries (owner_id, kind, label, sounds_like, said_on, category,
-                              mastered, mastery, mastery_history, concept_id)
-         VALUES ($1, $2, $3, $4, $5, $6, false, 'practicing', $7::jsonb, $8)
+                              mastered, mastery, mastery_history, concept_id, already_learned)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, true)
          RETURNING id`,
-        [ownerId, v[0], v[1], v[2], saidOn, v[3],
-         JSON.stringify([{ level: 'practicing', on: saidOn }]), concept.rows[0].id]);
+        [ownerId, v[0], v[1], v[2], saidOn, v[3], v[4] === 'mastered', v[4],
+         JSON.stringify([{ level: v[4], on: saidOn }]), concept.rows[0].id]);
       // Same client as the INSERT: the rows are not committed yet, so a
       // pool query would not see them.
       const row = await client.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
@@ -622,6 +625,7 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
            mastery_history = CASE WHEN $10::boolean
              THEN mastery_history || $11::jsonb ELSE mastery_history END,
            concept_id = $12,
+           already_learned = already_learned AND said_on = $5,
            updated_at = NOW()
        WHERE id = $13 AND owner_id = $14`,
       [values.kind, values.label, values.sounds_like, values.language_id,
@@ -743,6 +747,28 @@ async function ensureSchema() {
         jsonb_build_object('level', mastery, 'on', said_on::text))
       WHERE mastery_history = '[]'::jsonb;
   `);
+  // Quick-start picks are "already learned", not firsts learned today (the
+  // creator's follow-up): they keep their date for sorting but screens show
+  // "Already learned". Added with a one-time backfill: quick-start inserts
+  // run in one transaction, so a batch's created_at is identical, while a
+  // single first added by hand is its own timestamp. A batch of one pick
+  // cannot be told apart from a hand-added first and stays dated. Gating on
+  // the column being absent runs the backfill once, so a later date edit
+  // that cleared the flag is not undone on the next boot. Demo rows are
+  // excluded: the demo has no already-learned entries.
+  const hasLearned = await pool.query(
+    `SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'entries' AND column_name = 'already_learned'`);
+  if (!hasLearned.rows.length) {
+    await pool.query(
+      'ALTER TABLE entries ADD COLUMN IF NOT EXISTS already_learned boolean NOT NULL DEFAULT false');
+    await pool.query(`
+      UPDATE entries SET already_learned = true
+      WHERE NOT is_demo AND language_id IS NULL AND note IS NULL
+        AND (owner_id, created_at) IN (
+          SELECT owner_id, created_at FROM entries WHERE NOT is_demo
+          GROUP BY owner_id, created_at HAVING count(*) > 1)`);
+  }
   // All five tables hold personal family data: private, and staged without
   // their rows (see "Public vs private tables" in the platform conventions).
   await pool.query(`COMMENT ON TABLE children IS 'staging:private'`);

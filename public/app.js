@@ -287,9 +287,10 @@
   }
 
   // The quick start: common entries a parent can tap in one go instead of
-  // adding everything by hand (the creator's ask). Each pick is saved as an
-  // ordinary first dated today. Sounds are anything that makes a sound,
-  // animals and things alike: a car goes vroom, a horn goes beep beep.
+  // adding everything by hand (the creator's ask). Picks are saved as
+  // already learned, with no date, each at the stage the parent chose.
+  // Sounds are anything that makes a sound, animals and things alike: a car
+  // goes vroom, a horn goes beep beep.
   var QUICK_STARTS = [
     { group: 'Words', kind: 'word', items: [
       { label: 'mama' }, { label: 'dada' }, { label: 'ball' }, { label: 'milk' },
@@ -435,7 +436,7 @@
     search: '',
     filter: 'all', // all | word | sound | sign | emerging | practicing | mastered | month | lang:<name>
     sessionLangs: [], // languages created this session, still unused
-    quickPick: {}, // quick-start picks: item id -> true
+    quickPick: {}, // quick-start picks: item id -> mastery stage ('emerging'|'practicing'|'mastered')
     setupLangs: { English: true },
     setupExtra: [],
   };
@@ -614,15 +615,15 @@
   }
 
   // The quick start, straight after setup: tap what the child already does,
-  // save them all dated today, or skip and add entries one at a time.
+  // give each pick its stage, or skip and add entries one at a time.
   function quickstartHtml() {
     var name = state.child.name;
     var n = Object.keys(state.quickPick).length;
     return '' +
 '<main data-screen="quickstart" class="page">' + brandHtml(2) +
 '  <div><h1 class="setup-title">What does ' + esc(name) + ' already do?</h1>' +
-'  <p class="sub" style="margin-top:8px">Tap everything ' + esc(name) + ' already says or signs. Rilo saves them dated today, ' +
-      esc(fmtLong(todayIso())) + '. You can edit or delete any of them later.</p></div>' +
+'  <p class="sub" style="margin-top:8px">Tap everything ' + esc(name) + ' already says or signs. Rilo keeps them as already learned, with no date. ' +
+      'Tap a pick’s stage to show how well ' + esc(name) + ' says it, like Emerging for “wa” for water.</p></div>' +
     QUICK_STARTS.map(function (group) {
       var k = KINDS[group.kind];
       return '<section class="flex flex-col gap-3"><h2 class="section-heading" style="justify-content:flex-start;gap:8px">' +
@@ -631,8 +632,16 @@
         group.items.map(function (item, i) {
           var id = group.kind + '-' + i;
           var text = item.sounds_like && group.kind === 'sound' ? item.label + ' · ' + item.sounds_like : item.label;
-          return '<button type="button" class="chip' + (state.quickPick[id] ? ' chip-on' : '') +
-            '" data-quick="' + id + '" aria-pressed="' + !!state.quickPick[id] + '">' + esc(text) + '</button>';
+          var level = state.quickPick[id];
+          var chip = '<button type="button" class="chip' + (level ? ' chip-on' : '') +
+            '" data-quick="' + id + '" aria-pressed="' + !!level + '">' + esc(text) + '</button>';
+          if (!level) return chip;
+          // A picked chip carries its own small stage button, which cycles
+          // emerging, practicing, mastered.
+          return '<span class="qs-pick">' + chip +
+            '<button type="button" class="qs-stage qs-stage-' + level + '" data-quick-stage="' + id +
+            '" aria-label="Stage for ' + esc(item.label) + ': ' + MASTERY[level].label + '">' +
+            masteryIcon(level, 20) + MASTERY[level].label + '</button></span>';
         }).join('') + '</div></section>';
     }).join('') +
 '  <p data-form-error hidden class="form-error"></p>' +
@@ -725,7 +734,8 @@
     return KINDS[e.kind].one + ': ' + e.label +
       (e.sounds_like ? ', ' + e.sounds_like : '') +
       (e.language_name ? ', ' + e.language_name : '') +
-      ', ' + MASTERY[masteryOf(e)].label + ', ' + fmtLong(e.said_on);
+      ', ' + MASTERY[masteryOf(e)].label + ', ' +
+      (e.already_learned ? 'already learned' : fmtLong(e.said_on));
   }
 
   function recentRowHtml(e) {
@@ -737,7 +747,7 @@
       '<span class="entry-main"><span class="entry-top"><span class="entry-word">' + esc(e.label) + '</span>' +
         '<span class="entry-kicker ' + INK[tone] + '">' + KINDS[e.kind].one + (e.language_name ? ' · ' + esc(e.language_name) : '') + '</span></span>' +
         (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + '</span>' +
-      '<span class="entry-side"><span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span>' +
+      '<span class="entry-side"><span class="' + (e.already_learned ? 'learned-badge">Already learned' : 'entry-date">' + esc(fmtShort(e.said_on))) + '</span>' +
         '<span class="' + M_PILL[level] + '">' + MASTERY[level].label + '</span></span>' +
       '</button></li>';
   }
@@ -759,7 +769,7 @@
     if (f === 'all') return true;
     if (KINDS[f]) return e.kind === f;
     if (MASTERY[f]) return masteryOf(e) === f;
-    if (f === 'month') return e.said_on.slice(0, 7) === todayIso().slice(0, 7);
+    if (f === 'month') return !e.already_learned && e.said_on.slice(0, 7) === todayIso().slice(0, 7);
     if (f.indexOf('lang:') === 0) return (e.language_name || 'no language').toLowerCase() === f.slice(5);
     return true;
   }
@@ -821,18 +831,28 @@
     // The log is grouped by the age at which the word's first language was
     // noticed; each language under it keeps its own date.
     var groups = new Map();
+    var learned = [];
     rows.forEach(function (g) {
+      // Quick-start picks are not dated firsts: they gather in their own
+      // "Already learned" group at the bottom of the log.
+      if (g.already_learned) { learned.push(g); return; }
       var age = ageMonths(state.child.birthday, g.first_on);
       if (!groups.has(age)) groups.set(age, []);
       groups.get(age).push(g);
     });
-    return Array.from(groups.keys()).sort(function (a, b) { return b - a; }).map(function (age) {
+    var html = Array.from(groups.keys()).sort(function (a, b) { return b - a; }).map(function (age) {
       var group = groups.get(age);
       var first = group[0].first_on;
       return '<section class="age-group"><div class="age-heading"><h2>' + esc(formatAge(age, state.child.name)) + '</h2>' +
         '<span>' + esc(MONTH_NAMES[Number(first.slice(5, 7)) - 1] + ' ' + first.slice(0, 4)) + ' · ' + group.length + (group.length === 1 ? ' entry' : ' entries') + '</span></div>' +
         '<ul class="entry-list">' + group.map(logRowHtml).join('') + '</ul></section>';
     }).join('');
+    if (learned.length) {
+      html += '<section class="age-group"><div class="age-heading"><h2>Already learned</h2>' +
+        '<span>' + learned.length + (learned.length === 1 ? ' entry' : ' entries') + '</span></div>' +
+        '<ul class="entry-list">' + learned.map(logRowHtml).join('') + '</ul></section>';
+    }
+    return html;
   }
   function logRowHtml(g) {
     var e = g.title;
@@ -861,7 +881,7 @@
         '<span class="lang-chip ' + TINT[tone] + ' ' + INK[tone] + '">' + esc(e.language_name || KINDS[e.kind].one) + '</span>' +
         (e.is_demo ? '<span class="lang-chip tint-sage ink-sage">Staging demo</span>' : '') + '</span>' +
         (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + also + '</span>' +
-      '<span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span></button></li>';
+      (g.already_learned ? '' : '<span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span>') + '</button></li>';
   }
 
   // ── Entry detail ─────────────────────────────────────────────────────
@@ -886,7 +906,7 @@
     var level = masteryOf(e);
     var says = e.sounds_like
       ? (e.kind === 'sign' ? esc(name) + ' signs it: ' + esc(e.sounds_like) : esc(name) + ' says <i>“' + esc(e.sounds_like) + '”</i>')
-      : 'Noticed ' + esc(fmtLong(e.said_on));
+      : e.already_learned ? 'Already learned' : 'Noticed ' + esc(fmtLong(e.said_on));
     var history = Array.isArray(e.mastery_history) && e.mastery_history.length
       ? e.mastery_history.slice() : [{ level: level, on: e.said_on }];
     var age = formatAge(ageMonths(state.child.birthday, e.said_on), name);
@@ -899,15 +919,20 @@
 '  <p class="detail-says ' + INK[tone] + '">' + says + '</p>' +
 '</section>' +
 '<dl class="info-card">' +
-'  <div class="info-row"><dt>First noticed</dt><dd>' + esc(fmtFull(e.said_on)) + ' · ' + esc(age) + '</dd></div>' +
+'  <div class="info-row"><dt>First noticed</dt><dd>' +
+        (e.already_learned ? '<span class="learned-badge">Already learned</span>' : esc(fmtFull(e.said_on)) + ' · ' + esc(age)) + '</dd></div>' +
 '  <div class="info-row"><dt>Mastery</dt><dd>' + icon(MASTERY[level].icon, 26) + MASTERY[level].label + '</dd></div>' +
       (e.note ? '<div class="info-block"><dt>Notes</dt><dd>' + esc(e.note) + '</dd></div>' : '') +
       (e.is_demo ? '<div class="info-row"><dt>Source</dt><dd>Staging demo</dd></div>' : '') +
 '</dl>' +
 '<section class="journey"><h2>' + esc(name) + '’s journey with this ' + (e.kind === 'sign' ? 'sign' : e.kind === 'sound' ? 'sound' : 'word') + '</h2>' +
-      history.slice().reverse().map(function (step) {
+      history.slice().reverse().map(function (step, i) {
         var m = MASTERY[step.level] || MASTERY.emerging;
-        return '<div class="journey-step">' + icon(m.icon, 34) + '<div><b>' + m.label + '</b> <span>· ' + esc(fmtShort(step.on)) + '</span></div></div>';
+        // The journey's first step of an already-learned entry has no day:
+        // later stage changes keep their real dates.
+        var when = e.already_learned && i === history.length - 1
+          ? 'Already learned' : fmtShort(step.on);
+        return '<div class="journey-step">' + icon(m.icon, 34) + '<div><b>' + m.label + '</b> <span>· ' + esc(when) + '</span></div></div>';
       }).join('') +
 '</section>' +
       (others.length
@@ -970,6 +995,9 @@
       return MONTH_NAMES[Number(m.key.slice(5)) - 1] + ' ' + m.total;
     }).join(', ');
     var langTotal = data.byLanguage.reduce(function (s, l) { return s + l.count; }, 0) || 1;
+    // The month the family started using Rilo, if they onboarded with
+    // quick-start picks: a note under the chart explains the empty start.
+    var baselineMonth = data.growth.find(function (m) { return m.baseline > 0; });
     return '' +
 '<header class="page-head"><div><p class="eyebrow">' + esc(name) + ' · ' + esc(formatAge(ageMonths(state.child.birthday, todayIso()), name)) + '</p>' +
 '  <h1 class="h-display" tabindex="-1">Insights</h1></div>' + icon('sparkle', 56) + '</header>' +
@@ -983,6 +1011,8 @@
           '<div class="bar' + (now ? ' bar-now' : '') + '" style="height:' + Math.max(4, Math.round(m.total / max * 130)) + 'px"></div></div>';
       }).join('') +
 '  </div><div class="bar-labels" aria-hidden="true">' + shown.map(function (m) { return '<span>' + MONTH_NAMES[Number(m.key.slice(5)) - 1].slice(0, 3) + '</span>'; }).join('') + '</div>' +
+      (baselineMonth ? '<p class="fine-print">Started with ' + baselineMonth.baseline + ' already learned in ' +
+        MONTH_NAMES[Number(baselineMonth.key.slice(5)) - 1] + '.</p>' : '') +
 '  <details class="chart-table"><summary>Month by month' + (data.growth.length > 7 ? ' · full history' : '') + '</summary><table><thead><tr><th>Month</th><th>New</th><th>Total</th></tr></thead><tbody>' +
       data.growth.slice().reverse().map(function (m) {
         return '<tr><td>' + MONTH_NAMES[Number(m.key.slice(5)) - 1] + ' ' + m.key.slice(0, 4) + '</td><td>' + m.added + '</td><td>' + m.total + '</td></tr>';
@@ -1141,15 +1171,22 @@
     app.querySelectorAll('[data-quick]').forEach(function (chip) {
       chip.addEventListener('click', function () {
         var id = chip.getAttribute('data-quick');
+        // Picking starts at emerging; the pick's stage button moves it on.
         if (state.quickPick[id]) delete state.quickPick[id];
-        else state.quickPick[id] = true;
-        var on = !!state.quickPick[id];
-        chip.classList.toggle('chip-on', on);
-        chip.setAttribute('aria-pressed', String(on));
-        var n = Object.keys(state.quickPick).length;
-        var add = app.querySelector('#quick-add');
-        add.disabled = !n;
-        add.textContent = n ? (n === 1 ? 'Add 1 entry' : 'Add ' + n + ' entries') : 'Add entries';
+        else state.quickPick[id] = 'emerging';
+        render();
+        var again = app.querySelector('[data-quick="' + CSS.escape(id) + '"]');
+        if (again) again.focus();
+      });
+    });
+    app.querySelectorAll('[data-quick-stage]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-quick-stage');
+        var cycle = { emerging: 'practicing', practicing: 'mastered', mastered: 'emerging' };
+        state.quickPick[id] = cycle[state.quickPick[id]] || 'emerging';
+        render();
+        var again = app.querySelector('[data-quick-stage="' + CSS.escape(id) + '"]');
+        if (again) again.focus();
       });
     });
 
@@ -1280,6 +1317,7 @@
             label: item.label,
             sounds_like: item.sounds_like || '',
             category: inferCategory(item.label),
+            mastery: state.quickPick[group.kind + '-' + i],
           });
         }
       });
@@ -1625,6 +1663,13 @@
       var hint = content.querySelector('[data-age-hint]');
       var value = content.querySelector('[data-date]').value;
       if (!value) { hint.hidden = true; return; }
+      // An already-learned entry keeps its note while its date is unchanged;
+      // changing the date turns it into an ordinary dated first.
+      if (isEdit && entry.already_learned && value === entry.said_on) {
+        hint.textContent = 'Already learned. Change the date only if you remember when.';
+        hint.hidden = false;
+        return;
+      }
       hint.textContent = name + ' was ' + formatAge(ageMonths(state.child.birthday, value), name);
       hint.hidden = false;
     }

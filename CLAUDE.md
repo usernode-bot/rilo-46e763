@@ -169,12 +169,24 @@ The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights
 - **Mastery has three stages** (the creator's redesign): `mastery` is
   `emerging` (tried it once or twice), `practicing` (uses it with a nudge)
   or `mastered` (says it on their own); new entries start emerging, quick
-  starts practicing. `mastery_history` (jsonb) lists each stage and the day
+  starts carry the stage the parent chose per pick (default emerging).
+  `mastery_history` (jsonb) lists each stage and the day
   it was reached: a PATCH that changes the stage appends one step dated the
   request's today. The old `mastered` boolean is kept in step and still
   accepted from a request that sends only it. Rows from before the stages
   were migrated in `ensureSchema()` (mastered stays mastered, "still
   learning" became practicing, journey = one step on `said_on`).
+- **Quick-start picks are `already_learned`** (the creator's follow-up):
+  `entries.already_learned` (boolean, default false) marks rows saved by
+  `POST /api/quick-start`. They keep the onboarding day in `said_on` for
+  sorting and as the insights baseline month, but screens show "Already
+  learned" instead of a date or age (the Log gathers them in a last group),
+  and growth counts them only as that first month's baseline, never as new.
+  A PATCH that changes `said_on` clears the flag (the entry becomes an
+  ordinary dated first). The one-time backfill in `ensureSchema()` flags
+  pre-change batches, told apart by their shared `created_at` (quick-start
+  inserts run in one transaction); a single-pick batch stays dated. Demo
+  rows are never flagged.
 - The welcome asks for the **languages at home**; each one picked is
   created with `POST /api/languages` right after the child is saved.
 - **Sounds are animals AND things** (the creator's ask: car vroom,
