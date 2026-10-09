@@ -136,7 +136,8 @@
 
 .font-display, .h-display, .hero-count, .kind-count, .entry-word, .detail-word,
 .m-count, .big-input, .sheet-title, .section-heading h2, .age-heading h2,
-.profile-card h2, .setup-title, .brand-name, .growth-big, .lang-num {
+.profile-card h2, .setup-title, .brand-name, .growth-big, .lang-num,
+.lang-block-word, .across-word {
   font-family: 'Bricolage Grotesque', Figtree, system-ui, sans-serif;
   letter-spacing: -0.02em;
 }
@@ -414,3 +415,31 @@ textarea.field { padding: 12px 16px; min-height: 88px; line-height: 1.45; }
   .hero-cow { width: 128px; height: 124px; }
   .detail-word { font-size: 44px; }
 }
+
+/* One card per word: the other languages on a concept. The log row's
+   .also-list sits under the note, above a dashed divider; the entry page's
+   .lang-block reuses the journey card's look; .link-row holds the sheet's
+   linking field; .across-* is Insights' "Across languages" list. */
+.concept-row { align-items: flex-start; }
+.also-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgb(var(--line)); }
+.also-row { display: flex; align-items: center; gap: 8px; font-size: 14px; min-width: 0; }
+.also-word { font-weight: 600; }
+.also-says { color: rgb(var(--muted)); font-style: italic; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.also-date { font-size: 12px; color: rgb(var(--muted)); flex: none; }
+.lang-block { background: rgb(var(--surface)); border-radius: 28px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.lang-block-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.lang-block-top .pill-btn { min-height: 44px; }
+.lang-block-word { font-size: 32px; font-weight: 600; line-height: 1.1; }
+.lang-block .info-row { padding: 10px 0; }
+.lang-block .info-row:first-child { border-top: 1px solid rgb(var(--hair)); }
+.lang-block .btn-danger { margin-top: 4px; }
+.link-row { display: flex; align-items: center; gap: 8px; min-height: 52px; border: 1px solid rgb(var(--line)); border-radius: 16px; padding: 4px 8px 4px 16px; font-size: 15px; flex-wrap: wrap; }
+.link-row b { font-weight: 600; }
+.link-row .link-btn { min-height: 44px; }
+.across-item { display: flex; flex-direction: column; gap: 6px; }
+.across-item + .across-item { border-top: 1px solid rgb(var(--hair)); padding-top: 12px; }
+.across-word { font-size: 20px; font-weight: 600; }
+.across-lang { display: flex; align-items: center; gap: 10px; font-size: 14px; min-height: 30px; }
+.across-name { font-weight: 600; width: 72px; flex: none; }
+.across-label { flex: 1; font-style: italic; color: rgb(var(--muted)); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.across-stage { display: flex; align-items: center; gap: 4px; font-weight: 600; font-size: 13px; color: rgb(var(--sage-ink)); flex: none; }

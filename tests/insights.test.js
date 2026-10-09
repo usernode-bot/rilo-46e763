@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { summarize } = require('../public/insights');
+const { summarize, groupConcepts } = require('../public/insights');
 test('monthly new words include gaps, cross years, and exclude sounds/signs', () => {
   const data = summarize([
     { kind: 'word', said_on: '2025-12-31', language_name: 'English', mastered: true },
@@ -37,4 +37,64 @@ test('empty records produce honest zero metrics and a six month chart', () => {
   assert.ok(data.months.every(m => m.count === 0));
   assert.equal(data.counts.mastered, 0);
   assert.deepEqual(data.languages, []);
+});
+
+test('groupConcepts groups by concept_id and stands alone without one', () => {
+  const water = { id: 1, kind: 'word', label: 'water', concept_id: 7, said_on: '2026-05-03', language_name: 'English', mastery: 'mastered', mastered: true };
+  const agua = { id: 5, kind: 'word', label: 'agua', concept_id: 7, said_on: '2026-10-05', language_name: 'Spanish', mastery: 'emerging', mastered: false };
+  const duck = { id: 9, kind: 'sound', label: 'duck', concept_id: null, said_on: '2026-10-01', language_name: 'English', mastery: 'emerging' };
+  const groups = groupConcepts([agua, water, duck]);
+  assert.equal(groups.length, 2);
+  const pair = groups.find(g => g.key === 'c7');
+  assert.equal(pair.title, water);
+  assert.deepEqual(pair.entries, [water, agua]);
+  assert.equal(pair.first_on, '2026-05-03');
+  assert.equal(pair.kind, 'word');
+  // A null concept_id stands alone.
+  assert.deepEqual(groups.find(g => g.key === 'e9').entries, [duck]);
+});
+
+test('totals count a concept once, whatever its languages', () => {
+  const data = summarize([
+    { id: 1, kind: 'word', label: 'water', concept_id: 7, said_on: '2026-05-03', language_name: 'English', mastery: 'mastered', mastered: true },
+    { id: 5, kind: 'word', label: 'agua', concept_id: 7, said_on: '2026-10-05', language_name: 'Spanish', mastery: 'emerging' },
+    { id: 9, kind: 'sound', label: 'duck', concept_id: null, said_on: '2026-10-01', language_name: 'English', mastery: 'emerging' },
+  ], '2026-10-08');
+  // water and agua share one concept: two concepts, three entries.
+  assert.equal(data.total, 2);
+  // October's growth counts duck only: agua is not a new word.
+  assert.deepEqual(data.growth.slice(-2).map(m => [m.key, m.added, m.total]),
+    [['2026-09', 0, 1], ['2026-10', 1, 2]]);
+  // Adding agua this week to an older concept is not "+1 this week".
+  assert.equal(data.thisWeek, 0);
+});
+
+test('mastery and languages stay per language', () => {
+  const data = summarize([
+    { id: 1, kind: 'word', label: 'water', concept_id: 7, said_on: '2026-05-03', language_name: 'English', mastery: 'mastered', mastered: true },
+    { id: 5, kind: 'word', label: 'agua', concept_id: 7, said_on: '2026-10-05', language_name: 'Spanish', mastery: 'emerging' },
+    { id: 9, kind: 'sound', label: 'duck', concept_id: null, said_on: '2026-10-01', language_name: 'English', mastery: 'emerging' },
+  ], '2026-10-08');
+  assert.deepEqual(data.mastery, { emerging: 2, practicing: 0, mastered: 1 });
+  assert.deepEqual(data.byLanguage.map(l => [l.name, l.count]),
+    [['English', 2], ['Spanish', 1]]);
+});
+
+test('acrossLanguages lists multi-language words once, newest first', () => {
+  const linked = [
+    { id: 1, kind: 'word', label: 'water', concept_id: 7, said_on: '2026-05-03', language_name: 'English', mastery: 'mastered' },
+    { id: 5, kind: 'word', label: 'agua', concept_id: 7, said_on: '2026-10-05', language_name: 'Spanish', mastery: 'emerging' },
+    { id: 9, kind: 'sound', label: 'duck', concept_id: null, said_on: '2026-10-01', language_name: 'English', mastery: 'emerging' },
+  ];
+  const data = summarize(linked, '2026-10-08');
+  assert.equal(data.acrossLanguages.length, 1);
+  assert.deepEqual(data.acrossLanguages[0].title, 'water');
+  assert.deepEqual(data.acrossLanguages[0].languages, [
+    { id: 1, label: 'water', language_name: 'English', mastery: 'mastered' },
+    { id: 5, label: 'agua', language_name: 'Spanish', mastery: 'emerging' },
+  ]);
+  const alone = summarize([
+    { id: 1, kind: 'word', label: 'ball', concept_id: null, said_on: '2026-10-01', language_name: 'English', mastery: 'emerging' },
+  ], '2026-10-08');
+  assert.deepEqual(alone.acrossLanguages, []);
 });

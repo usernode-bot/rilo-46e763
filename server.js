@@ -209,7 +209,7 @@ const wrap = (fn) => (req, res, next) =>
 // The row shape /api/state, /api/entries (POST) and PATCH /api/entries/:id
 // all return to the page.
 const ENTRY_SELECT = `
-  SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id,
+  SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id, e.concept_id,
          e.category, e.mastered, e.mastery, e.mastery_history,
          e.said_on::text AS said_on, e.note, e.is_demo,
          l.name AS language_name
@@ -262,7 +262,7 @@ app.get('/api/state', wrap(async (req, res) => {
      ORDER BY lower(l.name)`,
     [ownerId]);
   const entries = await pool.query(
-    `SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id,
+    `SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id, e.concept_id,
             e.category, e.mastered, e.mastery, e.mastery_history,
             e.said_on::text AS said_on, e.note, e.is_demo,
             l.name AS language_name
@@ -386,6 +386,30 @@ async function validateEntry(req, res, ownerId) {
       return null;
     }
   }
+  // The concept this entry's language belongs to: absent means "leave it as
+  // it is" (an add makes its own concept), null means "put it on an entry of
+  // its own", an integer names a concept of the same owner to join.
+  let concept_id;
+  let concept_kind = null;
+  if (req.body.concept_id !== undefined) {
+    if (req.body.concept_id === null) {
+      concept_id = null;
+    } else {
+      concept_id = Number(req.body.concept_id);
+      if (!Number.isInteger(concept_id)) {
+        res.status(400).json({ error: 'Choose one of your entries to link to.' });
+        return null;
+      }
+      const owned = await pool.query(
+        'SELECT kind FROM concepts WHERE id = $1 AND owner_id = $2',
+        [concept_id, ownerId]);
+      if (!owned.rows.length) {
+        res.status(400).json({ error: 'Choose one of your entries to link to.' });
+        return null;
+      }
+      concept_kind = owned.rows[0].kind;
+    }
+  }
   return {
     kind, label,
     sounds_like: sounds_like || null,
@@ -394,6 +418,8 @@ async function validateEntry(req, res, ownerId) {
     said_on,
     category: validCategory(req.body.category),
     mastery: validMastery(req.body),
+    concept_id,
+    concept_kind,
   };
 }
 
@@ -401,18 +427,42 @@ app.post('/api/entries', wrap(async (req, res) => {
   const ownerId = String(req.user.id);
   const values = await validateEntry(req, res, ownerId);
   if (!values) return;
+  if (values.concept_id != null && values.concept_kind !== values.kind) {
+    return res.status(400).json({ error: 'Link it to an entry of the same type.' });
+  }
   // The journey starts on the day it was first noticed, at the stage chosen.
   const history = JSON.stringify([{ level: values.mastery, on: values.said_on }]);
-  const inserted = await pool.query(
-    `INSERT INTO entries (owner_id, kind, label, sounds_like, language_id, said_on, note,
-                          category, mastered, mastery, mastery_history)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
-     RETURNING id`,
-    [ownerId, values.kind, values.label, values.sounds_like, values.language_id,
-     values.said_on, values.note, values.category, values.mastery === 'mastered',
-     values.mastery, history]);
-  const row = await pool.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
-  res.status(201).json(row.rows[0]);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // A linked add joins an existing concept; anything else gets a concept of
+    // its own, so every entry always sits in exactly one.
+    let conceptId = values.concept_id;
+    if (conceptId == null) {
+      const concept = await client.query(
+        'INSERT INTO concepts (owner_id, kind) VALUES ($1, $2) RETURNING id',
+        [ownerId, values.kind]);
+      conceptId = concept.rows[0].id;
+    }
+    const inserted = await client.query(
+      `INSERT INTO entries (owner_id, kind, label, sounds_like, language_id, said_on, note,
+                            category, mastered, mastery, mastery_history, concept_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)
+       RETURNING id`,
+      [ownerId, values.kind, values.label, values.sounds_like, values.language_id,
+       values.said_on, values.note, values.category, values.mastery === 'mastered',
+       values.mastery, history, conceptId]);
+    // Same client as the INSERT: the row is not committed yet, so a pool
+    // query would not see it.
+    const row = await client.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
+    await client.query('COMMIT');
+    res.status(201).json(row.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }));
 
 // The quick start onboarding: everything the child already does, tapped in
@@ -456,13 +506,17 @@ app.post('/api/quick-start', wrap(async (req, res) => {
     await client.query('BEGIN');
     const rows = [];
     for (const v of values) {
+      // Each pick is its own word: one concept per entry.
+      const concept = await client.query(
+        'INSERT INTO concepts (owner_id, kind) VALUES ($1, $2) RETURNING id',
+        [ownerId, v[0]]);
       const inserted = await client.query(
         `INSERT INTO entries (owner_id, kind, label, sounds_like, said_on, category,
-                              mastered, mastery, mastery_history)
-         VALUES ($1, $2, $3, $4, $5, $6, false, 'practicing', $7::jsonb)
+                              mastered, mastery, mastery_history, concept_id)
+         VALUES ($1, $2, $3, $4, $5, $6, false, 'practicing', $7::jsonb, $8)
          RETURNING id`,
         [ownerId, v[0], v[1], v[2], saidOn, v[3],
-         JSON.stringify([{ level: 'practicing', on: saidOn }])]);
+         JSON.stringify([{ level: 'practicing', on: saidOn }]), concept.rows[0].id]);
       // Same client as the INSERT: the rows are not committed yet, so a
       // pool query would not see them.
       const row = await client.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
@@ -482,32 +536,113 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
   const ownerId = String(req.user.id);
   const id = Number.parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(404).json({ error: 'First not found.' });
-  const owned = await pool.query(
-    'SELECT mastery FROM entries WHERE id = $1 AND owner_id = $2', [id, ownerId]);
-  if (!owned.rows.length) return res.status(404).json({ error: 'First not found.' });
-  const values = await validateEntry(req, res, ownerId);
-  if (!values) return;
-  // A change of stage is a step on the word's journey, dated today (the
-  // request's own "now", so a staging preview's chosen moment rules it).
-  // A first never earlier than the day it was first noticed.
-  const changed = owned.rows[0].mastery !== values.mastery;
-  const today = serverToday(req.now);
-  const step = JSON.stringify([{
-    level: values.mastery, on: today < values.said_on ? values.said_on : today,
-  }]);
-  await pool.query(
-    `UPDATE entries
-     SET kind = $1, label = $2, sounds_like = $3, language_id = $4,
-         said_on = $5, note = $6, category = $7, mastered = $8, mastery = $9,
-         mastery_history = CASE WHEN $10::boolean
-           THEN mastery_history || $11::jsonb ELSE mastery_history END,
-         updated_at = NOW()
-     WHERE id = $12 AND owner_id = $13`,
-    [values.kind, values.label, values.sounds_like, values.language_id,
-     values.said_on, values.note, values.category, values.mastery === 'mastered',
-     values.mastery, changed, step, id, ownerId]);
-  const row = await pool.query(ENTRY_SELECT, [id, ownerId]);
-  res.json(row.rows[0]);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const owned = await client.query(
+      'SELECT mastery, kind, concept_id FROM entries WHERE id = $1 AND owner_id = $2',
+      [id, ownerId]);
+    if (!owned.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'First not found.' });
+    }
+    const current = owned.rows[0];
+    const values = await validateEntry(req, res, ownerId);
+    if (!values) {
+      await client.query('ROLLBACK');
+      return;
+    }
+    // Where this language's entry lives after the save. Absent keeps the
+    // current concept; null puts it on an entry of its own (unless it is
+    // already alone there); an integer moves it to that concept, which must
+    // be of the same type.
+    let conceptId = current.concept_id;
+    let movedFrom = null;
+    const target = values.concept_id;
+    if (target !== undefined && target !== conceptId) {
+      if (target === null) {
+        const mate = await client.query(
+          'SELECT 1 FROM entries WHERE concept_id = $1 AND owner_id = $2 AND id <> $3 LIMIT 1',
+          [conceptId, ownerId, id]);
+        if (mate.rows.length && conceptId != null) {
+          movedFrom = conceptId;
+          const concept = await client.query(
+            'INSERT INTO concepts (owner_id, kind) VALUES ($1, $2) RETURNING id',
+            [ownerId, values.kind]);
+          conceptId = concept.rows[0].id;
+        }
+      } else {
+        if (values.concept_kind !== values.kind) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Link it to an entry of the same type.' });
+        }
+        movedFrom = conceptId;
+        conceptId = target;
+      }
+    }
+    // A kept concept follows its entry's type when the entry is alone in it;
+    // otherwise the entry moves to a concept of its own.
+    if (movedFrom === null) {
+      if (conceptId == null) {
+        const concept = await client.query(
+          'INSERT INTO concepts (owner_id, kind) VALUES ($1, $2) RETURNING id',
+          [ownerId, values.kind]);
+        conceptId = concept.rows[0].id;
+      } else {
+        const cur = await client.query('SELECT kind FROM concepts WHERE id = $1', [conceptId]);
+        if (cur.rows.length && cur.rows[0].kind !== values.kind) {
+          const mate = await client.query(
+            'SELECT 1 FROM entries WHERE concept_id = $1 AND owner_id = $2 AND id <> $3 LIMIT 1',
+            [conceptId, ownerId, id]);
+          if (mate.rows.length) {
+            movedFrom = conceptId;
+            const concept = await client.query(
+              'INSERT INTO concepts (owner_id, kind) VALUES ($1, $2) RETURNING id',
+              [ownerId, values.kind]);
+            conceptId = concept.rows[0].id;
+          } else {
+            await client.query('UPDATE concepts SET kind = $1 WHERE id = $2',
+              [values.kind, conceptId]);
+          }
+        }
+      }
+    }
+    // A change of stage is a step on the word's journey, dated today (the
+    // request's own "now", so a staging preview's chosen moment rules it).
+    // A first never earlier than the day it was first noticed.
+    const changed = current.mastery !== values.mastery;
+    const today = serverToday(req.now);
+    const step = JSON.stringify([{
+      level: values.mastery, on: today < values.said_on ? values.said_on : today,
+    }]);
+    await client.query(
+      `UPDATE entries
+       SET kind = $1, label = $2, sounds_like = $3, language_id = $4,
+           said_on = $5, note = $6, category = $7, mastered = $8, mastery = $9,
+           mastery_history = CASE WHEN $10::boolean
+             THEN mastery_history || $11::jsonb ELSE mastery_history END,
+           concept_id = $12,
+           updated_at = NOW()
+       WHERE id = $13 AND owner_id = $14`,
+      [values.kind, values.label, values.sounds_like, values.language_id,
+       values.said_on, values.note, values.category, values.mastery === 'mastered',
+       values.mastery, changed, step, conceptId, id, ownerId]);
+    // A concept the entry moved away from is deleted once it holds nothing.
+    if (movedFrom != null) {
+      await client.query(
+        `DELETE FROM concepts c WHERE c.id = $1 AND c.owner_id = $2
+         AND NOT EXISTS (SELECT 1 FROM entries WHERE concept_id = c.id)`,
+        [movedFrom, ownerId]);
+    }
+    const row = await client.query(ENTRY_SELECT, [id, ownerId]);
+    await client.query('COMMIT');
+    res.json(row.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }));
 
 app.delete('/api/entries/:id', wrap(async (req, res) => {
@@ -515,8 +650,15 @@ app.delete('/api/entries/:id', wrap(async (req, res) => {
   const id = Number.parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(404).json({ error: 'First not found.' });
   const deleted = await pool.query(
-    'DELETE FROM entries WHERE id = $1 AND owner_id = $2', [id, ownerId]);
+    'DELETE FROM entries WHERE id = $1 AND owner_id = $2 RETURNING concept_id', [id, ownerId]);
   if (!deleted.rowCount) return res.status(404).json({ error: 'First not found.' });
+  const oldConcept = deleted.rows[0].concept_id;
+  if (oldConcept != null) {
+    await pool.query(
+      `DELETE FROM concepts c WHERE c.id = $1 AND c.owner_id = $2
+       AND NOT EXISTS (SELECT 1 FROM entries WHERE concept_id = c.id)`,
+      [oldConcept, ownerId]);
+  }
   res.status(204).end();
 }));
 
@@ -563,6 +705,21 @@ async function ensureSchema() {
       owner_id text PRIMARY KEY,
       seeded_at timestamptz NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS concepts (
+      id serial PRIMARY KEY,
+      owner_id text NOT NULL,
+      kind text NOT NULL CHECK (kind IN ('word','sound','sign')),
+      created_at timestamptz NOT NULL DEFAULT NOW()
+    );
+  `);
+  // A concept groups the entries that are the same word in different
+  // languages ("agua" and "water" on one card). Mastery stays on each entry,
+  // which is already per language, so the concept carries nothing but the
+  // grouping. Added forward-only: the column is nullable, and a backfill
+  // below gives every entry a concept.
+  await pool.query(`
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS concept_id int REFERENCES concepts(id) ON DELETE SET NULL;
+    CREATE INDEX IF NOT EXISTS entries_owner_concept ON entries (owner_id, concept_id);
   `);
   // Added after the first version shipped (the creator's follow-up): every
   // first belongs to a category, whose illustration shows on the block, and
@@ -586,20 +743,50 @@ async function ensureSchema() {
         jsonb_build_object('level', mastery, 'on', said_on::text))
       WHERE mastery_history = '[]'::jsonb;
   `);
-  // All four tables hold personal family data: private, and staged without
+  // All five tables hold personal family data: private, and staged without
   // their rows (see "Public vs private tables" in the platform conventions).
   await pool.query(`COMMENT ON TABLE children IS 'staging:private'`);
   await pool.query(`COMMENT ON TABLE languages IS 'staging:private'`);
   await pool.query(`COMMENT ON TABLE entries IS 'staging:private'`);
+  await pool.query(`COMMENT ON TABLE concepts IS 'staging:private'`);
   await pool.query(`COMMENT ON TABLE demo_seeds IS 'staging:private'`);
+
+  // One-time, forward-only backfill: entries logged separately with exactly
+  // the same word and the same type are grouped into one concept. Only rows
+  // without a concept are touched, so this is idempotent and runs on every
+  // boot. Accents are not folded: "mama" and "mamá" stay separate until a
+  // parent links them.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const groups = await client.query(
+      `SELECT owner_id, kind, lower(label) AS key, array_agg(id ORDER BY id) AS ids
+       FROM entries WHERE concept_id IS NULL GROUP BY 1, 2, 3`);
+    for (const g of groups.rows) {
+      const concept = await client.query(
+        'INSERT INTO concepts (owner_id, kind) VALUES ($1, $2) RETURNING id',
+        [g.owner_id, g.kind]);
+      await client.query(
+        'UPDATE entries SET concept_id = $1 WHERE id = ANY($2) AND owner_id = $3',
+        [concept.rows[0].id, g.ids, g.owner_id]);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-// The 23 demo firsts: kind, label, how it sounds or is signed, language,
+// The 24 demo firsts: kind, label, how it sounds or is signed, language,
 // category (which illustration the block shows), whether it is mastered
 // already, the age in months it happened at, and the day within that month.
 // The date is the seeded child's birthday plus the months plus the day,
 // capped at today. Older firsts are mastered, the last few months' are
 // practicing and the newest are emerging, so all three stages are visible.
+// `link` puts the row on the same concept as the row with that label, so
+// "water" and "agua" share one card.
 const DEMO_ROWS = [
   { kind: 'word',  label: 'agua',     sounds_like: 'awa',     language: 'Spanish', category: 'food',     months: 19, day: 4 },
   { kind: 'sound', label: 'duck',     sounds_like: 'kak kak', language: 'English', category: 'animals',  months: 19, day: 2 },
@@ -625,6 +812,7 @@ const DEMO_ROWS = [
   { kind: 'word',  label: 'dada',     sounds_like: 'dada',    language: 'English', category: 'people',   months: 13, day: 17, mastered: true },
   { kind: 'sign',  label: 'bye',      sounds_like: 'Opens and closes a hand', language: 'ASL', category: 'actions', months: 12, day: 21, mastered: true },
   { kind: 'word',  label: 'mamá',     sounds_like: 'mama',    language: 'Spanish', category: 'people',   months: 12, day: 9, mastered: true },
+  { kind: 'word',  label: 'water',    sounds_like: 'wawa',    language: 'English', category: 'food',     months: 14, day: 2, mastered: true, link: 'agua' },
 ];
 
 // Populates the viewing account's own first-version demo, once per viewer,
@@ -689,7 +877,12 @@ async function seedDemoFor(ownerId, now) {
       [ownerId, languageNames.map((n) => n.toLowerCase())]);
     const langId = Object.fromEntries(langs.rows.map((r) => [r.key, r.id]));
     let n = 0;
-    for (const row of DEMO_ROWS) {
+    const conceptOfLabel = {};
+    // Rows without a link are inserted first, each as its own concept; rows
+    // with one (water with agua) then reuse that row's concept, so the two
+    // languages share one card.
+    const linked = DEMO_ROWS.filter((row) => row.link);
+    for (const row of DEMO_ROWS.filter((r) => !r.link).concat(linked)) {
       n += 1;
       const [by, bm, bd] = birthday.split('-').map(Number);
       const at = new Date(Date.UTC(by, bm - 1 + row.months, bd + row.day));
@@ -707,17 +900,27 @@ async function seedDemoFor(ownerId, now) {
       const journey = [{ level: 'emerging', on: saidOn }];
       if (mastery !== 'emerging') journey.push({ level: 'practicing', on: later(9) });
       if (mastery === 'mastered') journey.push({ level: 'mastered', on: later(30) });
+      let conceptId = null;
+      if (row.link) {
+        conceptId = conceptOfLabel[row.link.toLowerCase()] || null;
+      } else {
+        const concept = await client.query(
+          'INSERT INTO concepts (owner_id, kind) VALUES ($1, $2) RETURNING id',
+          [ownerId, row.kind]);
+        conceptId = concept.rows[0].id;
+        conceptOfLabel[row.label.toLowerCase()] = conceptId;
+      }
       await client.query(
         `INSERT INTO entries
            (owner_id, kind, label, sounds_like, language_id, said_on, note,
-            category, mastered, mastery, mastery_history, is_demo, demo_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, true, $12)
+            category, mastered, mastery, mastery_history, is_demo, demo_key, concept_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, true, $12, $13)
          ON CONFLICT (owner_id, demo_key) DO NOTHING`,
         [ownerId, row.kind, row.label, row.sounds_like,
          langId[row.language.toLowerCase()] || null, saidOn, row.note || null,
          row.category || 'words', mastery === 'mastered', mastery,
          JSON.stringify(journey),
-         'demo-' + String(n).padStart(2, '0')]);
+         'demo-' + String(n).padStart(2, '0'), conceptId]);
     }
     await client.query('COMMIT');
   } catch (err) {
