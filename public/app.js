@@ -441,7 +441,8 @@
   };
 
   function countKind(kind) {
-    return state.entries.filter(function (e) { return e.kind === kind; }).length;
+    return window.RiloInsights.groupConcepts(state.entries)
+      .filter(function (c) { return c.kind === kind; }).length;
   }
   function byNewest(a, b) { return b.said_on.localeCompare(a.said_on) || b.id - a.id; }
   function languagesUsed() {
@@ -723,6 +724,21 @@
       ', ' + MASTERY[masteryOf(e)].label + ', ' + fmtLong(e.said_on);
   }
 
+  // One card per word: the concept helpers behind the log, the entry page
+  // and the add sheet. A concept groups the entries that carry the same
+  // word in different languages; mastery stays on each entry.
+  function allConcepts() {
+    return window.RiloInsights.groupConcepts(state.entries);
+  }
+  function conceptFor(all, e) {
+    return all.find(function (c) {
+      return c.entries.some(function (x) { return x.id === e.id; });
+    });
+  }
+  function conceptAria(c) {
+    return c.entries.map(entryAria).join('; ');
+  }
+
   function recentRowHtml(e) {
     var tone = e.language_name ? langTone(e.language_name) : KINDS[e.kind].tone;
     var level = masteryOf(e);
@@ -758,12 +774,19 @@
     if (f.indexOf('lang:') === 0) return (e.language_name || 'no language').toLowerCase() === f.slice(5);
     return true;
   }
-  function selectedEntries() {
+  function selectedConcepts() {
     var q = state.search.trim().toLowerCase();
-    return state.entries.filter(function (e) {
-      return matchesFilter(e, state.filter) &&
-        (!q || (e.label + ' ' + (e.sounds_like || '') + ' ' + (e.note || '') + ' ' + (e.language_name || '')).toLowerCase().indexOf(q) !== -1);
-    }).sort(byNewest);
+    return allConcepts().filter(function (c) {
+      var ok = c.kind === state.filter ||
+        c.entries.some(function (e) { return matchesFilter(e, state.filter); });
+      if (!ok) return false;
+      if (!q) return true;
+      return c.entries.some(function (e) {
+        return (e.label + ' ' + (e.sounds_like || '') + ' ' + (e.note || '') + ' ' + (e.language_name || '')).toLowerCase().indexOf(q) !== -1;
+      });
+    }).sort(function (a, b) {
+      return b.first_on.localeCompare(a.first_on) || b.title.id - a.title.id;
+    });
   }
   function logHtml() {
     var filters = ['all', 'word', 'sound', 'sign'];
@@ -786,12 +809,12 @@
         ['emerging', 'practicing', 'mastered'].map(function (l) { return '<span>' + icon(MASTERY[l].icon, 20) + MASTERY[l].label + '</span>'; }).join('') + '</div>' : '');
   }
   function logCount() {
-    var n = selectedEntries().length;
+    var n = selectedConcepts().length;
     if (state.filter === 'all' && !state.search.trim()) return n + (n === 1 ? ' entry' : ' entries');
     return n + ' found';
   }
   function listHtml() {
-    var rows = selectedEntries();
+    var rows = selectedConcepts();
     if (!state.entries.length) {
       return '<div class="state-empty">' + icon('book', 56) + '<p>No entries yet.</p><p class="sub">Every word, sound and sign you add shows up here, grouped by age.</p><button type="button" class="btn-primary" data-add-kind="word">Add an entry</button></div>';
     }
@@ -799,68 +822,113 @@
       return '<div class="state-empty">' + icon('search', 48) + '<p>Nothing matches yet.</p><p class="sub">Try another search or filter, or add something new.</p><button type="button" class="btn-secondary" data-add-kind="' + (KINDS[state.filter] ? state.filter : 'word') + '">Add an entry</button></div>';
     }
     var groups = new Map();
-    rows.forEach(function (e) {
-      var age = ageMonths(state.child.birthday, e.said_on);
+    rows.forEach(function (c) {
+      var age = ageMonths(state.child.birthday, c.first_on);
       if (!groups.has(age)) groups.set(age, []);
-      groups.get(age).push(e);
+      groups.get(age).push(c);
     });
     return Array.from(groups.keys()).sort(function (a, b) { return b - a; }).map(function (age) {
       var group = groups.get(age);
-      var first = group[0].said_on;
+      var first = group[0].first_on;
       return '<section class="age-group"><div class="age-heading"><h2>' + esc(formatAge(age, state.child.name)) + '</h2>' +
         '<span>' + esc(MONTH_NAMES[Number(first.slice(5, 7)) - 1] + ' ' + first.slice(0, 4)) + ' · ' + group.length + (group.length === 1 ? ' entry' : ' entries') + '</span></div>' +
         '<ul class="entry-list">' + group.map(logRowHtml).join('') + '</ul></section>';
     }).join('');
   }
-  function logRowHtml(e) {
+  function logRowHtml(c) {
+    var e = c.title;
     var tone = e.language_name ? langTone(e.language_name) : KINDS[e.kind].tone;
     var note = e.sounds_like ? (e.kind === 'sign' ? e.sounds_like : '“' + e.sounds_like + '”') : (e.note || '');
-    return '<li><button type="button" class="entry-row" data-entry="' + e.id + '" aria-label="' + esc(entryAria(e)) + '">' +
+    var also = c.entries.slice(1);
+    return '<li><button type="button" class="entry-row' + (also.length ? ' concept-row' : '') + '" data-entry="' + e.id + '" aria-label="' + esc(conceptAria(c)) + '">' +
       masteryIcon(masteryOf(e), 26) +
       '<span class="entry-main"><span class="entry-top"><span class="entry-word" style="font-size:17px">' + esc(e.label) + '</span>' +
         '<span class="lang-chip ' + TINT[tone] + ' ' + INK[tone] + '">' + esc(e.language_name || KINDS[e.kind].one) + '</span>' +
         (e.is_demo ? '<span class="lang-chip tint-sage ink-sage">Staging demo</span>' : '') + '</span>' +
-        (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + '</span>' +
+        (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') +
+        (also.length ? '<span class="also-list">' + also.map(alsoRowHtml).join('') + '</span>' : '') + '</span>' +
       '<span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span></button></li>';
+  }
+  function alsoRowHtml(x) {
+    var t = x.language_name ? langTone(x.language_name) : KINDS[x.kind].tone;
+    var note = x.sounds_like ? (x.kind === 'sign' ? x.sounds_like : '“' + x.sounds_like + '”') : '';
+    return '<span class="also-row">' + masteryIcon(masteryOf(x), 20) +
+      '<span class="also-word">' + esc(x.label) + '</span>' +
+      '<span class="lang-chip ' + TINT[t] + ' ' + INK[t] + '">' + esc(x.language_name || KINDS[x.kind].one) + '</span>' +
+      (note ? '<span class="also-says">' + esc(note) + '</span>' : '') +
+      '<span class="also-date">' + esc(fmtShort(x.said_on)) + '</span></span>';
   }
 
   // ── Entry detail ─────────────────────────────────────────────────────
+  function journeySteps(e) {
+    var level = masteryOf(e);
+    var history = Array.isArray(e.mastery_history) && e.mastery_history.length
+      ? e.mastery_history.slice() : [{ level: level, on: e.said_on }];
+    return history.slice().reverse().map(function (step) {
+      var m = MASTERY[step.level] || MASTERY.emerging;
+      return '<div class="journey-step">' + icon(m.icon, 34) + '<div><b>' + m.label + '</b> <span>· ' + esc(fmtShort(step.on)) + '</span></div></div>';
+    }).join('');
+  }
+  function saysHtml(x, name) {
+    return x.sounds_like
+      ? (x.kind === 'sign' ? esc(name) + ' signs it: ' + esc(x.sounds_like) : esc(name) + ' says <i>“' + esc(x.sounds_like) + '”</i>')
+      : 'Noticed ' + esc(fmtLong(x.said_on));
+  }
   function entryHtml() {
     var e = state.entries.find(function (x) { return x.id === state.entryId; });
     if (!e) {
       return '<header class="page-head"><button type="button" class="round-btn" data-page="log" aria-label="Back to the log">' + icon('back', 22) + '</button></header>' +
         '<div class="state-empty">' + icon('search', 48) + '<h1 class="font-display" style="font-size:20px;font-weight:600" tabindex="-1">This entry isn’t here any more.</h1><p class="sub">It may have been deleted.</p><button type="button" class="btn-secondary" data-page="log">Back to the log</button></div>';
     }
+    // A hash naming one of the other languages opens the shared card, at
+    // its title language.
+    var c = conceptFor(allConcepts(), e);
+    var title = c ? c.title : e;
+    var others = c ? c.entries.filter(function (x) { return x.id !== title.id; }) : [];
     var name = state.child.name;
-    var tone = e.language_name ? langTone(e.language_name) : KINDS[e.kind].tone;
-    var level = masteryOf(e);
-    var says = e.sounds_like
-      ? (e.kind === 'sign' ? esc(name) + ' signs it: ' + esc(e.sounds_like) : esc(name) + ' says <i>“' + esc(e.sounds_like) + '”</i>')
-      : 'Noticed ' + esc(fmtLong(e.said_on));
-    var history = Array.isArray(e.mastery_history) && e.mastery_history.length
-      ? e.mastery_history.slice() : [{ level: level, on: e.said_on }];
-    var age = formatAge(ageMonths(state.child.birthday, e.said_on), name);
+    var tone = title.language_name ? langTone(title.language_name) : KINDS[title.kind].tone;
+    var level = masteryOf(title);
+    var says = saysHtml(title, name);
+    var age = formatAge(ageMonths(state.child.birthday, title.said_on), name);
     return '' +
 '<header class="page-head" style="align-items:center"><button type="button" class="round-btn" data-page="log" aria-label="Back to the log">' + icon('back', 22) + '</button>' +
-'  <button type="button" class="pill-btn" data-edit-entry="' + e.id + '">' + icon('edit', 22) + 'Edit</button></header>' +
-'<section class="detail-hero ' + TINT[tone] + '">' + icon(entryIconName(e), 92, { fill: 'white', cls: 'ico-hero' }) +
-'  <span class="detail-kicker ' + INK[tone] + '">' + KINDS[e.kind].one + (e.language_name ? ' · ' + esc(e.language_name) : '') + '</span>' +
-'  <h1 class="detail-word" tabindex="-1">' + esc(e.label) + '</h1>' +
+'  <button type="button" class="pill-btn" data-edit-entry="' + title.id + '">' + icon('edit', 22) + 'Edit</button></header>' +
+'<section class="detail-hero ' + TINT[tone] + '">' + icon(entryIconName(title), 92, { fill: 'white', cls: 'ico-hero' }) +
+'  <span class="detail-kicker ' + INK[tone] + '">' + KINDS[title.kind].one + (title.language_name ? ' · ' + esc(title.language_name) : '') + '</span>' +
+'  <h1 class="detail-word" tabindex="-1">' + esc(title.label) + '</h1>' +
 '  <p class="detail-says ' + INK[tone] + '">' + says + '</p>' +
 '</section>' +
 '<dl class="info-card">' +
-'  <div class="info-row"><dt>First noticed</dt><dd>' + esc(fmtFull(e.said_on)) + ' · ' + esc(age) + '</dd></div>' +
+'  <div class="info-row"><dt>First noticed</dt><dd>' + esc(fmtFull(title.said_on)) + ' · ' + esc(age) + '</dd></div>' +
 '  <div class="info-row"><dt>Mastery</dt><dd>' + icon(MASTERY[level].icon, 26) + MASTERY[level].label + '</dd></div>' +
-      (e.note ? '<div class="info-block"><dt>Notes</dt><dd>' + esc(e.note) + '</dd></div>' : '') +
-      (e.is_demo ? '<div class="info-row"><dt>Source</dt><dd>Staging demo</dd></div>' : '') +
+      (title.note ? '<div class="info-block"><dt>Notes</dt><dd>' + esc(title.note) + '</dd></div>' : '') +
+      (title.is_demo ? '<div class="info-row"><dt>Source</dt><dd>Staging demo</dd></div>' : '') +
 '</dl>' +
-'<section class="journey"><h2>' + esc(name) + '’s journey with this ' + (e.kind === 'sign' ? 'sign' : e.kind === 'sound' ? 'sound' : 'word') + '</h2>' +
-      history.slice().reverse().map(function (step) {
-        var m = MASTERY[step.level] || MASTERY.emerging;
-        return '<div class="journey-step">' + icon(m.icon, 34) + '<div><b>' + m.label + '</b> <span>· ' + esc(fmtShort(step.on)) + '</span></div></div>';
-      }).join('') +
+'<section class="journey"><h2>' + esc(name) + '’s journey with this ' + (title.kind === 'sign' ? 'sign' : title.kind === 'sound' ? 'sound' : 'word') + '</h2>' +
+      journeySteps(title) +
 '</section>' +
-'<button type="button" class="btn-danger" data-delete-entry="' + e.id + '">' + icon('trash', 22) + 'Delete entry</button>';
+      (others.length ? '<div class="section-heading"><h2>In other languages</h2></div>' : '') +
+      others.map(function (x) { return langBlockHtml(x, name); }).join('') +
+'<button type="button" class="btn-secondary" data-add-language>Add another language</button>' +
+'<button type="button" class="btn-danger" data-delete-entry="' + title.id + '">' + icon('trash', 22) +
+      (others.length ? 'Delete ' + esc(title.label) : 'Delete entry') + '</button>';
+  }
+  function langBlockHtml(x, name) {
+    var tone = x.language_name ? langTone(x.language_name) : KINDS[x.kind].tone;
+    var level = masteryOf(x);
+    var age = formatAge(ageMonths(state.child.birthday, x.said_on), name);
+    return '<section class="lang-block">' +
+'<div class="lang-block-top"><span class="lang-chip ' + TINT[tone] + ' ' + INK[tone] + '">' + esc(x.language_name || KINDS[x.kind].one) + '</span>' +
+'  <button type="button" class="pill-btn" data-edit-entry="' + x.id + '">' + icon('edit', 22) + 'Edit</button></div>' +
+'<h3 class="lang-block-word">' + esc(x.label) + '</h3>' +
+'<p class="lang-block-says ' + INK[tone] + '">' + saysHtml(x, name) + '</p>' +
+'<dl>' +
+'  <div class="info-row"><dt>First noticed</dt><dd>' + esc(fmtFull(x.said_on)) + ' · ' + esc(age) + '</dd></div>' +
+'  <div class="info-row"><dt>Mastery</dt><dd>' + icon(MASTERY[level].icon, 26) + MASTERY[level].label + '</dd></div>' +
+'</dl>' +
+journeySteps(x) +
+'<button type="button" class="btn-danger" data-delete-entry="' + x.id + '">' + icon('trash', 22) + 'Delete ' + esc(x.label) + '</button>' +
+'</section>';
   }
 
   // ── Insights ─────────────────────────────────────────────────────────
@@ -921,6 +989,21 @@
         return '<button type="button" class="m-tile" data-filter-to="' + l + '">' + icon(MASTERY[l].icon, 34) +
           '<span class="m-count">' + data.mastery[l] + '</span><span class="m-name">' + MASTERY[l].label + '</span></button>';
       }).join('') + '</div></section>' +
+'<section class="lang-card" aria-labelledby="across-h"><h2 id="across-h" class="card-label">Across languages</h2>' +
+      (data.acrossLanguages.length
+        ? data.acrossLanguages.map(function (item) {
+            return '<div class="across-item"><span class="across-word">' + esc(item.label) + '</span>' +
+              item.languages.map(function (l) {
+                var tone = l.language_name ? langTone(l.language_name) : 'sage';
+                return '<div class="across-lang"><span class="swatch ' + SWATCH[tone] + '"></span>' +
+                  '<span class="across-name">' + esc(l.language_name || 'No language') + '</span>' +
+                  '<span class="across-label">' + esc(l.label) + '</span>' +
+                  '<span class="across-stage">' + icon(MASTERY[l.mastery].icon, 20) + MASTERY[l.mastery].label + '</span></div>';
+              }).join('') + '</div>';
+          }).join('') +
+          '<p class="note-box">Each of these counts once in ' + esc(name) + '’s total. Mastery counts each language on its own.</p>'
+        : '<p class="sub">When ' + esc(name) + ' has a word in more than one language, link them on one entry and it shows here.</p>') +
+'</section>' +
 '<section class="flex flex-col gap-3" aria-labelledby="play-h"><h2 id="play-h" class="font-display" style="font-size:20px;font-weight:600;padding:4px 4px 0">Play ideas for this week</h2>' +
       SUGGESTIONS.map(function (s, i) {
         return '<button type="button" class="play-card" data-suggestion="' + i + '"><span class="play-icon ' + TINT[s.tone] + '">' + icon(s.icon, 40, { fill: 'white' }) + '</span>' +
@@ -1004,15 +1087,23 @@
       openEntrySheet(null, KINDS[state.filter] && state.page === 'log' ? state.filter : 'word');
     });
 
-    var editEntry = app.querySelector('[data-edit-entry]');
-    if (editEntry) editEntry.addEventListener('click', function () {
-      var e = state.entries.find(function (x) { return x.id === Number(editEntry.getAttribute('data-edit-entry')); });
-      if (e) openEntrySheet(e);
+    app.querySelectorAll('[data-edit-entry]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var e = state.entries.find(function (x) { return x.id === Number(btn.getAttribute('data-edit-entry')); });
+        if (e) openEntrySheet(e);
+      });
     });
-    var del = app.querySelector('[data-delete-entry]');
-    if (del) del.addEventListener('click', function () {
-      var e = state.entries.find(function (x) { return x.id === Number(del.getAttribute('data-delete-entry')); });
-      if (e) deleteEntry(e);
+    app.querySelectorAll('[data-delete-entry]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var e = state.entries.find(function (x) { return x.id === Number(btn.getAttribute('data-delete-entry')); });
+        if (e) deleteEntry(e);
+      });
+    });
+    var addLang = app.querySelector('[data-add-language]');
+    if (addLang) addLang.addEventListener('click', function () {
+      var e = state.entries.find(function (x) { return x.id === state.entryId; });
+      var c = e ? conceptFor(allConcepts(), e) : null;
+      if (c) openEntrySheet(null, c.kind, c);
     });
 
     var quickAdd = app.querySelector('#quick-add');
@@ -1209,15 +1300,24 @@
   }
 
   async function deleteEntry(entry) {
+    var c = conceptFor(allConcepts(), entry);
+    var remaining = c ? c.entries.filter(function (x) { return x.id !== entry.id; }) : [];
     var ok = await confirmDialog(
       'Delete “' + entry.label + '”?',
-      'This removes it from ' + state.child.name + '’s log and word count. Its notes and journey go too.');
+      'This removes it from ' + state.child.name + '’s log and word count. Its notes and journey go too.' +
+        (remaining.length ? ' The other languages stay.' : ''));
     if (!ok) return;
     try {
       await api('/api/entries/' + entry.id, { method: 'DELETE' });
       state.entries = state.entries.filter(function (e) { return e.id !== entry.id; });
       toast('Deleted ' + entry.label);
-      navigate('log');
+      // A shared card keeps its page: it moves to the next language's own
+      // detail (the lowest id becomes the title).
+      if (remaining.length) {
+        navigate('entry', { entryId: remaining.slice().sort(function (a, b) { return a.id - b.id; })[0].id });
+      } else {
+        navigate('log');
+      }
       refreshState().catch(function () {});
     } catch (err) {
       toast(err.code === 'account_required' ? 'Make an account to keep entries.' : (err.message || 'Could not delete it. Try again.'));
@@ -1274,7 +1374,12 @@
   }
 
   // ── The add / edit sheet ─────────────────────────────────────────────
-  function openEntrySheet(entry, presetKind) {
+  // Capitals and accents are folded when matching a word the family
+  // already has, so "mama" and "mamá" find each other.
+  function foldWord(s) {
+    return String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+  function openEntrySheet(entry, presetKind, linkTo) {
     if (!state.child) return;
     var isEdit = !!entry;
     var kind = isEdit ? entry.kind : (presetKind || 'word');
@@ -1285,7 +1390,20 @@
       // begins as emerging.
       mastery: isEdit ? masteryOf(entry) : 'emerging',
       newLang: false,
+      linkSearch: false,
+      // "Add another language" arrives already linked to that card; a
+      // plain edit carries the entry's own concept; a new entry links
+      // only when the parent says so.
+      conceptId: linkTo ? linkTo.key : (isEdit && entry.concept_id != null ? entry.concept_id : null),
     };
+    if (linkTo) {
+      // A language the card does not have yet, most used first.
+      var taken = {};
+      linkTo.entries.forEach(function (x) { if (x.language_id != null) taken[x.language_id] = true; });
+      var free = state.languages.slice().sort(function (a, b) { return b.uses - a.uses; })
+        .find(function (l) { return !taken[l.id]; });
+      form.languageId = free ? free.id : null;
+    }
 
     var content = document.createElement('form');
     content.novalidate = true;
@@ -1315,6 +1433,92 @@
         var on = btn.getAttribute('data-mastery') === form.mastery;
         btn.classList.toggle('on', on);
         btn.setAttribute('aria-checked', String(on));
+      });
+    }
+
+    // The linking field: the card it is joined to, a way to search for one,
+    // and a suggestion when the typed word already exists. Rilo never
+    // links anything on its own.
+    function linkArea() {
+      var holder = content.querySelector('[data-link-area]');
+      var noun = form.kind === 'sound' ? 'sound' : form.kind === 'sign' ? 'sign' : 'word';
+      var all = allConcepts();
+      var current = form.conceptId != null
+        ? all.find(function (c) { return c.key === form.conceptId; }) : null;
+      var heading = '<p class="field-label">Same ' + noun + ' in another language <span style="font-weight:400">optional</span></p>';
+      if (current) {
+        holder.innerHTML = heading +
+          '<div class="link-row"><span>Linked with</span>' +
+            current.entries.filter(function (x) { return !isEdit || x.id !== entry.id; }).map(function (x) {
+              var t = x.language_name ? langTone(x.language_name) : KINDS[x.kind].tone;
+              return '<b>' + esc(x.label) + '</b><span class="lang-chip ' + TINT[t] + ' ' + INK[t] + '">' + esc(x.language_name || KINDS[x.kind].one) + '</span>';
+            }).join('') +
+            '<span class="grow"></span><button type="button" class="link-btn" data-unlink>Unlink</button></div>';
+        holder.querySelector('[data-unlink]').addEventListener('click', function () {
+          form.conceptId = null;
+          linkArea();
+        });
+        return;
+      }
+      var typed = foldWord(content.querySelector('[data-label-input]').value);
+      var match = null;
+      if (typed) {
+        all.some(function (c) {
+          if (c.kind !== form.kind) return false;
+          if (isEdit && c.key === entry.concept_id) return false;
+          var hit = c.entries.find(function (x) { return foldWord(x.label) === typed; });
+          if (!hit) return false;
+          match = { concept: c, entry: hit };
+          return true;
+        });
+      }
+      var html = heading +
+        '<div class="chips-row"><button type="button" class="chip chip-dashed" data-open-link>+ Link to an entry</button></div>' +
+        (match ? '<div class="link-row">You already have <b>' + esc(match.entry.label) + '</b> in ' +
+            esc(match.entry.language_name || 'no language') + '. ' +
+            '<span class="grow"></span><button type="button" class="link-btn" data-link-suggest>Link</button></div>' : '');
+      if (form.linkSearch) {
+        var q = content.querySelector('[data-link-search]') ? content.querySelector('[data-link-search]').value : '';
+        var results = all.filter(function (c) {
+          if (c.kind !== form.kind) return false;
+          if (isEdit && c.key === entry.concept_id) return false;
+          return !q || c.entries.some(function (x) { return foldWord(x.label).indexOf(foldWord(q)) !== -1; });
+        }).slice(0, 6);
+        html += '<div class="mt-2"><input data-link-search class="field" type="search" placeholder="Search ' + esc(name) + '’s ' +
+          (form.kind === 'sound' ? 'sounds' : form.kind === 'sign' ? 'signs' : 'words') + '" value="' + esc(q) + '">' +
+          '<ul class="entry-list">' + (results.length
+            ? results.map(function (c) {
+                var t = c.title.language_name ? langTone(c.title.language_name) : KINDS[c.kind].tone;
+                return '<li><button type="button" class="entry-row" data-link-to="' + c.key + '">' +
+                  '<span class="entry-main"><span class="entry-top"><span class="entry-word" style="font-size:16px">' + esc(c.title.label) + '</span>' +
+                  '<span class="lang-chip ' + TINT[t] + ' ' + INK[t] + '">' + esc(c.title.language_name || KINDS[c.kind].one) + '</span></span>' +
+                  '<span class="entry-note">' + esc(c.entries.length > 1 ? c.entries.length + ' languages' : ' ' + KINDS[c.kind].one.toLowerCase()) + '</span></span>' +
+                  '<span class="entry-date">' + esc(fmtShort(c.first_on)) + '</span></button></li>';
+              }).join('')
+            : '<li><div class="entry-row"><span class="entry-note">Nothing matches. Unlinked, this entry stands alone.</span></div></li>') +
+          '</ul></div>';
+      }
+      holder.innerHTML = html;
+      var open = holder.querySelector('[data-open-link]');
+      if (open) open.addEventListener('click', function () {
+        form.linkSearch = true;
+        linkArea();
+        var box = holder.querySelector('[data-link-search]');
+        if (box) box.focus({ preventScroll: true });
+      });
+      var box = holder.querySelector('[data-link-search]');
+      if (box) box.addEventListener('input', function () { linkArea(); });
+      holder.querySelectorAll('[data-link-to]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          form.conceptId = Number(btn.getAttribute('data-link-to'));
+          form.linkSearch = false;
+          linkArea();
+        });
+      });
+      var suggest = holder.querySelector('[data-link-suggest]');
+      if (suggest) suggest.addEventListener('click', function () {
+        form.conceptId = match.concept.key;
+        linkArea();
       });
     }
 
@@ -1376,6 +1580,7 @@
     labels();
     chips();
     mastery();
+    linkArea();
     ageHint();
 
     content.querySelector('[data-cancel]').addEventListener('click', function () { sheet.dismiss(); });
@@ -1383,8 +1588,14 @@
       btn.addEventListener('click', function () {
         form.kind = btn.getAttribute('data-kind');
         if (!isEdit) form.languageId = defaultLanguageId(form.kind);
+        // A link only holds between entries of the same type.
+        if (form.conceptId != null) {
+          var c = allConcepts().find(function (c) { return c.key === form.conceptId; });
+          if (c && c.kind !== form.kind) form.conceptId = null;
+        }
         labels();
         chips();
+        linkArea();
       });
     });
     content.querySelectorAll('[data-mastery]').forEach(function (btn) {
@@ -1394,6 +1605,7 @@
       });
     });
     content.querySelector('[data-date]').addEventListener('change', ageHint);
+    content.querySelector('[data-label-input]').addEventListener('input', linkArea);
 
     content.addEventListener('submit', async function (event) {
       event.preventDefault();
@@ -1421,6 +1633,10 @@
       // The category follows the word itself, so it is not a field the
       // parent fills in.
       payload.category = inferCategory(payload.label);
+      // An edit always says where the entry belongs; a new entry only when
+      // its parent linked it to an existing card.
+      if (isEdit) payload.concept_id = form.conceptId;
+      else if (form.conceptId != null) payload.concept_id = form.conceptId;
       var button = content.querySelector('[data-save]');
       button.disabled = true;
       try {
@@ -1457,6 +1673,7 @@
 '  <label class="field-label" style="margin:0" for="entry-label" data-label-the></label>' +
 '  <input id="entry-label" data-label-input class="big-input" type="text" maxlength="60" autocomplete="off" value="' + (isEdit ? esc(entry.label) : '') + '">' +
 '</div>' +
+'<div class="mt-4" data-link-area></div>' +
 '<div class="mt-4"><p class="field-label" id="lang-label">Language <span style="font-weight:400">optional</span></p><div data-lang-area></div></div>' +
 '<div class="mt-4"><label class="field-label" for="entry-date" style="display:flex;align-items:center;gap:6px">' + icon('calendar', 20) + 'First noticed</label>' +
 '  <input id="entry-date" data-date class="field" type="date" value="' + (isEdit ? esc(entry.said_on) : today) +

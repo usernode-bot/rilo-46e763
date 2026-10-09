@@ -18,6 +18,34 @@
     return y + '-' + String(m).padStart(2, '0');
   }
 
+  // One card per word: a concept groups the entries that carry the same
+  // word (or sound or sign) in different languages, and each entry keeps
+  // its own language, mastery and journey. An entry without a concept_id
+  // (an old cached state, or a moment between deploy and backfill) stands
+  // alone. Entries are sorted by id, so the title is the first language
+  // entered, and the card sits in the log at the earliest of its dates.
+  function groupConcepts(entries) {
+    var map = new Map();
+    var orphans = [];
+    entries.forEach(function (e) {
+      if (e.concept_id != null) {
+        if (!map.has(e.concept_id)) map.set(e.concept_id, []);
+        map.get(e.concept_id).push(e);
+      } else {
+        orphans.push(e);
+      }
+    });
+    var concepts = Array.from(map.keys()).map(function (key) {
+      var list = map.get(key).slice().sort(function (a, b) { return a.id - b.id; });
+      return { key: key, kind: list[0].kind, title: list[0], entries: list,
+        first_on: list.reduce(function (min, e) { return e.said_on < min ? e.said_on : min; }, list[0].said_on) };
+    });
+    orphans.forEach(function (e, i) {
+      concepts.push({ key: 'e' + (e.id != null ? e.id : i), kind: e.kind, title: e, entries: [e], first_on: e.said_on });
+    });
+    return concepts;
+  }
+
   function summarize(entries, today) {
     var words = entries.filter(function (e) { return e.kind === 'word'; });
     var counts = { word: words.length, sound: 0, sign: 0, mastered: 0 };
@@ -41,16 +69,17 @@
       months.push({ key: key, count: words.filter(function (e) { return e.said_on.slice(0, 7) === key; }).length });
     }
 
-    // Everything the child has: words, sounds and signs together.
-    // growth: each month's new entries and the running total at its end,
-    // from the first entry (at least seven months shown).
-    var firstAll = entries.reduce(function (min, e) { return e.said_on.slice(0, 7) < min ? e.said_on.slice(0, 7) : min; }, current);
-    var gStart = Math.min(end - 6, monthIndex(firstAll));
+    // Everything the child has: one card per word, however many languages
+    // it carries. growth counts each card once, at the date its first
+    // language was noticed; mastery and languages stay per entry.
+    var concepts = groupConcepts(entries);
+    var gFirst = concepts.reduce(function (min, c) { return c.first_on.slice(0, 7) < min ? c.first_on.slice(0, 7) : min; }, current);
+    var gStart = Math.min(end - 6, monthIndex(gFirst));
     var running = 0;
     var growth = [];
     for (var g = gStart; g <= end; g++) {
       var gKey = monthKey(g);
-      var added = entries.filter(function (e) { return e.said_on.slice(0, 7) === gKey; }).length;
+      var added = concepts.filter(function (c) { return c.first_on.slice(0, 7) === gKey; }).length;
       running += added;
       growth.push({ key: gKey, added: added, total: running });
     }
@@ -74,14 +103,28 @@
     weekAgo.setUTCDate(weekAgo.getUTCDate() - 6);
     var weekStart = weekAgo.toISOString().slice(0, 10);
 
+    // The words a child has in more than one language, newest first, each
+    // listed once with every language and its own stage under it.
+    var acrossLanguages = concepts
+      .filter(function (c) { return c.entries.length >= 2; })
+      .sort(function (a, b) { return b.first_on.localeCompare(a.first_on); })
+      .map(function (c) {
+        return {
+          key: c.key, kind: c.kind, label: c.title.label, first_on: c.first_on,
+          languages: c.entries.map(function (e) {
+            return { id: e.id, label: e.label, language_name: e.language_name || null, mastery: masteryOf(e) };
+          }),
+        };
+      });
+
     return { counts: counts, languages: Array.from(languages.values()), months: months,
       thisMonth: entries.filter(function (e) { return e.said_on.slice(0, 7) === current; }),
-      total: entries.length,
-      thisWeek: entries.filter(function (e) { return e.said_on >= weekStart && e.said_on <= today; }).length,
-      growth: growth, byLanguage: languageList, mastery: mastery };
+      total: concepts.length,
+      thisWeek: concepts.filter(function (c) { return c.first_on >= weekStart && c.first_on <= today; }).length,
+      growth: growth, byLanguage: languageList, mastery: mastery, acrossLanguages: acrossLanguages };
   }
 
-  var api = { summarize: summarize, masteryOf: masteryOf };
+  var api = { summarize: summarize, masteryOf: masteryOf, groupConcepts: groupConcepts };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RiloInsights = api;
 })(typeof window !== 'undefined' ? window : globalThis);

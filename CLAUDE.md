@@ -131,9 +131,24 @@ The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights
 
 ## App-specific conventions
 
-- All four tables (`children`, `languages`, `entries`, `demo_seeds`) are
+- All five tables (`children`, `languages`, `entries`, `concepts`,
+  `demo_seeds`) are
   `staging:private` and per owner: every query is scoped to
   `owner_id = String(req.user.id)`; there are no public tables.
+- **One card per word**: a `concepts` row groups the entries that carry
+  the same word (or sound or sign) in different languages; each entry has
+  a nullable `concept_id` and keeps its own language, mastery and journey.
+  Mastery and "By language" stay per entry; every total (Home's big
+  number, the kind counts, the log count, Insights' growth) counts
+  concepts once, at each concept's first date (`first_on` from
+  `groupConcepts` in `public/insights.js`). The title of a card is the
+  entry with the lowest id (the first language entered); deleting it
+  promotes the next one. Linking is always the parent's act (add/edit
+  sheet's "Same word in another language" field, same-kind only); the
+  only automatic step is the boot backfill, which puts existing entries
+  with exactly the same lower-cased label and kind on one concept
+  (accents not folded) and only touches rows still without a concept.
+  Insights' "Across languages" lists each multi-language card once.
 - The birthday is asked as **month and year only** (the creator's ask):
   `PUT /api/child` takes `birth_month` (`YYYY-MM`) and stores it as that
   month's first day, so every age counts whole calendar months from the
