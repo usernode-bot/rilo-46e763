@@ -737,124 +737,282 @@
       '</button></li>';
   }
 
+  // ── Log ──────────────────────────────────────────────────────────────
+  function filterLabel(f) {
+    if (f === 'all') return 'All';
+    if (KINDS[f]) return KINDS[f].many;
+    if (MASTERY[f]) return MASTERY[f].label;
+    if (f === 'month') return 'This month';
+    if (f.indexOf('lang:') === 0) {
+      var key = f.slice(5);
+      var hit = state.entries.find(function (e) { return (e.language_name || 'no language').toLowerCase() === key; });
+      return hit ? (hit.language_name || 'No language') : key;
+    }
+    return f;
+  }
+  function matchesFilter(e, f) {
+    if (f === 'all') return true;
+    if (KINDS[f]) return e.kind === f;
+    if (MASTERY[f]) return masteryOf(e) === f;
+    if (f === 'month') return e.said_on.slice(0, 7) === todayIso().slice(0, 7);
+    if (f.indexOf('lang:') === 0) return (e.language_name || 'no language').toLowerCase() === f.slice(5);
+    return true;
+  }
+  function selectedEntries() {
+    var q = state.search.trim().toLowerCase();
+    return state.entries.filter(function (e) {
+      return matchesFilter(e, state.filter) &&
+        (!q || (e.label + ' ' + (e.sounds_like || '') + ' ' + (e.note || '') + ' ' + (e.language_name || '')).toLowerCase().indexOf(q) !== -1);
+    }).sort(byNewest);
+  }
   function logHtml() {
-    return headerHtml(state.tab ? KINDS[state.tab].many : 'Word collection', state.filter ? (state.filter === 'mastered' ? 'Mastered spoken words' : state.filter === 'month' ? 'Entries learned this month' : 'Spoken words · ' + state.filter.slice(9)) : 'Every little way to communicate', false) +
-      '<button class="btn-secondary" data-page="words">‹ Back to words</button><label class="sr-only" for="word-search">Search entries</label><input id="word-search" class="field log-search" type="search" placeholder="Search words, sounds or signs" value="' + esc(state.search) + '">' +
-      '<div class="log-filters" aria-label="Filter entries">' + ['all','word','sound','sign'].map(function(kind) { return '<button class="chip ' + ((state.tab || 'all') === kind ? 'chip-on' : '') + '" data-log="' + kind + '" aria-pressed="' + ((state.tab || 'all') === kind) + '">' + (kind === 'all' ? 'All' : KINDS[kind].many) + '</button>'; }).join('') + (state.filter ? '<button class="chip" data-clear-filter>Clear insight filter</button>' : '') + '</div><div id="firsts-area" aria-live="polite">' + listHtml() + '</div>';
+    var filters = ['all', 'word', 'sound', 'sign'];
+    languagesUsed().forEach(function (n) { filters.push('lang:' + n.toLowerCase()); });
+    filters.push('mastered');
+    if (filters.indexOf(state.filter) === -1) filters.splice(1, 0, state.filter);
+    return '' +
+'<header class="page-head"><div><p class="eyebrow">' + esc(state.child.name) + '’s log</p>' +
+'  <h1 class="h-display" tabindex="-1" data-log-count>' + esc(logCount()) + '</h1></div>' + icon('book', 60) + '</header>' +
+'<div class="search-wrap"><label class="sr-only" for="word-search">Search words, sounds, signs and notes</label>' + icon('search', 24) +
+'  <input id="word-search" class="field" type="search" placeholder="Search words, signs, notes" value="' + esc(state.search) + '"></div>' +
+'<div class="chips-row" role="group" aria-label="Filter entries">' +
+      filters.map(function (f) {
+        var on = state.filter === f;
+        return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-filter="' + esc(f) + '" aria-pressed="' + on + '">' + esc(filterLabel(f)) + '</button>';
+      }).join('') +
+'</div>' +
+'<div id="firsts-area" class="flex flex-col gap-5" aria-live="polite">' + listHtml() + '</div>' +
+      (state.entries.length ? '<div class="legend" aria-hidden="true">' +
+        ['emerging', 'practicing', 'mastered'].map(function (l) { return '<span>' + icon(MASTERY[l].icon, 20) + MASTERY[l].label + '</span>'; }).join('') + '</div>' : '');
+  }
+  function logCount() {
+    var n = selectedEntries().length;
+    if (state.filter === 'all' && !state.search.trim()) return n + (n === 1 ? ' entry' : ' entries');
+    return n + ' found';
   }
   function listHtml() {
     var rows = selectedEntries();
-    if (!rows.length) return '<div class="state-empty"><p>No matching entries.</p><p class="text-muted">Try another filter or add something new.</p><button class="btn-primary" data-add-kind="' + (state.tab || 'word') + '">Add an entry</button></div>';
+    if (!state.entries.length) {
+      return '<div class="state-empty">' + icon('book', 56) + '<p>No entries yet.</p><p class="sub">Every word, sound and sign you add shows up here, grouped by age.</p><button type="button" class="btn-primary" data-add-kind="word">Add an entry</button></div>';
+    }
+    if (!rows.length) {
+      return '<div class="state-empty">' + icon('search', 48) + '<p>Nothing matches yet.</p><p class="sub">Try another search or filter, or add something new.</p><button type="button" class="btn-secondary" data-add-kind="' + (KINDS[state.filter] ? state.filter : 'word') + '">Add an entry</button></div>';
+    }
     var groups = new Map();
-    rows.forEach(function(e) { var age = ageMonths(state.child.birthday,e.said_on); if (!groups.has(age)) groups.set(age,[]); groups.get(age).push(e); });
-    return Array.from(groups.keys()).sort(function(a,b) { return b-a; }).map(function(age) { var group=groups.get(age); return '<section><div class="age-heading"><h2>' + esc(formatAge(age,state.child.name)) + '</h2><span>' + group.length + (group.length === 1 ? ' entry' : ' entries') + '</span></div><ul class="list">' + group.map(rowHtml).join('') + '</ul></section>'; }).join('');
+    rows.forEach(function (e) {
+      var age = ageMonths(state.child.birthday, e.said_on);
+      if (!groups.has(age)) groups.set(age, []);
+      groups.get(age).push(e);
+    });
+    return Array.from(groups.keys()).sort(function (a, b) { return b - a; }).map(function (age) {
+      var group = groups.get(age);
+      var first = group[0].said_on;
+      return '<section class="age-group"><div class="age-heading"><h2>' + esc(formatAge(age, state.child.name)) + '</h2>' +
+        '<span>' + esc(MONTH_NAMES[Number(first.slice(5, 7)) - 1] + ' ' + first.slice(0, 4)) + ' · ' + group.length + (group.length === 1 ? ' entry' : ' entries') + '</span></div>' +
+        '<ul class="entry-list">' + group.map(logRowHtml).join('') + '</ul></section>';
+    }).join('');
   }
-  function chartHtml(months) {
-    var shown = months.slice(-12), max = Math.max(4, ...shown.map(function(m) { return m.count; })), top = Math.ceil(max/4)*4;
-    var points = shown.map(function(m,i) { return { x: 40+i*410/(shown.length-1), y: 145-m.count*120/top, m:m }; });
-    var line = points.map(function(p) { return p.x + ',' + p.y; }).join(' ');
-    var marks = [0,1,2,3,4].map(function(i) { var y=145-i*30; return '<text x="27" y="' + (y+4) + '" text-anchor="end">' + (top*i/4) + '</text>'; }).join('');
-    return '<svg class="growth-chart" viewBox="0 0 480 190" role="img" aria-labelledby="chart-title chart-desc"><title id="chart-title">New spoken words learned each month</title><desc id="chart-desc">' + esc(shown.map(function(m) { return m.key + ': ' + m.count; }).join('; ')) + '</desc><defs><linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgb(var(--sign))" stop-opacity=".28"/><stop offset="100%" stop-color="rgb(var(--sign))" stop-opacity=".04"/></linearGradient></defs>' + marks + '<path class="chart-axis" d="M40 25V145H470"/><polygon points="40,145 ' + line + ' 450,145" fill="url(#chart-fill)"/><polyline points="' + line + '" fill="none" stroke="rgb(var(--accent))" stroke-width="2.7"/>' + points.map(function(p,i) { var label=MONTH_NAMES[Number(p.m.key.slice(5))-1].slice(0,3); return '<circle cx="' + p.x + '" cy="' + p.y + '" r="4.5" fill="rgb(var(--accent))"/><text class="chart-value" x="' + p.x + '" y="' + (p.y-10) + '" text-anchor="middle">' + p.m.count + '</text>' + (shown.length<=6 || i%2===0 || i===shown.length-1 ? '<text x="' + p.x + '" y="168" text-anchor="middle">' + label + '</text>' : ''); }).join('') + '</svg><details class="chart-table"><summary>Monthly word counts' + (months.length>12 ? ' · full history' : '') + '</summary><table><thead><tr><th>Month</th><th>New words</th></tr></thead><tbody>' + months.map(function(m) { return '<tr><td>' + m.key + '</td><td>' + m.count + '</td></tr>'; }).join('') + '</tbody></table></details>';
-  }
-  function statCard(n,label,icon,tone,filter,wide) {
-    return '<button class="stat-card tone-' + tone + (wide ? ' stat-wide' : '') + '" data-insight-filter="' + esc(filter) + '">' + art(icon, icon === 'bubble' ? label === 'English' ? 'EN' : label === 'Spanish' ? 'ES' : label.slice(0,2).toUpperCase() : '') + '<div><strong>' + n + '</strong><h3>' + esc(label) + '</h3><p>' + (label === 'Signs' ? 'Signs logged' : label === 'Sounds' ? 'Sounds logged' : 'Words') + '</p></div></button>';
-  }
-  var SUGGESTIONS = [
-    { title: 'Everyday words', sub: 'Foods, toys, favorite things', icon:'apple', tone:'word', kind:'word', detail: 'Name something your child is looking at during meals or play. Pause so they can respond, then repeat their attempt naturally. Try one familiar word in each language your family uses.' },
-    { title: 'Sound imitation', sub: 'Animals, vehicles, environmental sounds', icon:'car', tone:'sound', kind:'sound', detail: 'Take turns making a favorite animal or vehicle sound. Try a playful moo, woof or vroom with a toy or picture. Leave a pause for your child to join in and follow their interests.' },
-    { title: 'Simple gestures', sub: 'Signs for more, help, all done', icon:'hand', tone:'sign', kind:'sign', detail: 'Pair a familiar gesture with a spoken word in your everyday routine. Model more or all done at snack time without asking your child to perform. Respond to any way they choose to communicate.' },
-  ];
-  function suggestionsHtml() {
-    return '<div class="suggestion-grid">' + SUGGESTIONS.map(function(s,i) { return '<button class="suggestion-card tone-' + s.tone + '" data-suggestion="' + i + '">' + art(s.icon) + '<h3>' + s.title + '</h3><p>' + s.sub + '</p></button>'; }).join('') + '</div>';
-  }
-  function insightsHtml() {
-    var data = window.RiloInsights.summarize(state.entries,todayIso());
-    var english=data.languages.find(function(l) {return /^(english|en|inglés|ingles)$/i.test(l.name);});
-    var spanish=data.languages.find(function(l) {return /^(spanish|es|español|espanol)$/i.test(l.name);});
-    var other=data.languages.filter(function(l) {return l!==english && l!==spanish;});
-    var monthWords=data.thisMonth.filter(function(e) { return e.kind==='word'; }).length;
-    var monthSigns=data.thisMonth.filter(function(e) { return e.kind==='sign'; }).length;
-    var monthSounds=data.thisMonth.filter(function(e) { return e.kind==='sound'; }).length;
-    return headerHtml('Word insights','A look at ' + state.child.name + '’s language growth',false) +
-      '<section class="growth-card tone-butter"><div class="growth-heading"><div><h2>Growth over time</h2><p>New words learned each month</p></div>' + art('sprout') + '</div>' + chartHtml(data.months) + '</section>' +
-      '<div class="insight-primary">' + statCard(english ? english.count : 0,'English','bubble','word','language:' + (english ? english.name : 'English')) + statCard(spanish ? spanish.count : 0,'Spanish','bubble','sound','language:' + (spanish ? spanish.name : 'Spanish')) + statCard(data.counts.sign,'Signs','hand','sign','sign') + '</div>' +
-      (other.length ? '<div class="other-languages">' + other.map(function(l) {return statCard(l.count,l.name,'bubble','sound','language:' + l.name,true);}).join('') + '</div>' : '') +
-      '<div class="insight-secondary">' + statCard(data.counts.sound,'Sounds','duck','sign','sound',true) + statCard(data.counts.mastered,'Mastered','star','butter','mastered',true) + '</div>' +
-      '<section><div class="section-heading"><h2>What to try next</h2><button data-suggestion="all">See all <span aria-hidden="true">›</span></button></div>' + suggestionsHtml() + '</section>' +
-      '<section class="month-section"><h2>This month</h2><div class="month-list tone-butter">' + [ [monthWords + ' new spoken ' + (monthWords===1?'word':'words'),'bars','word'],[monthSounds + ' new ' + (monthSounds===1?'sound':'sounds'),'duck','sound'],[monthSigns + ' new ' + (monthSigns===1?'sign':'signs'),'hand','sign'] ].map(function(row) { return '<button data-month-kind="' + row[2] + '">' + art(row[1]) + '<span>' + row[0] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div></section>';
-  }
-  function profileHtml() {
-    return headerHtml('Profile', 'A little about ' + state.child.name, false) + '<section class="profile-card tone-butter">' + art('sun') + '<h2>' + esc(state.child.name) + '</h2><p>' + esc(formatAge(ageMonths(state.child.birthday,todayIso()),state.child.name)) + ' today</p><p>Born ' + esc(MONTH_NAMES[Number(state.child.birthday.slice(5,7))-1]) + ' ' + esc(state.child.birthday.slice(0,4)) + '</p><button id="edit-child" class="btn-primary">Edit child profile</button></section><section class="profile-about"><h2>Your language story</h2><p>' + state.entries.length + ' entries · ' + languagesUsed() + ' languages</p><p>Spoken words, sounds and signs are tracked separately. A mastered word is one you have marked as mastered.</p><button class="btn-secondary" data-page="insights">View word insights</button></section>';
-  }
-  function openSuggestion(value) {
-    var choices = value === 'all' ? SUGGESTIONS : [SUGGESTIONS[Number(value)]];
-    var content = document.createElement('div'); content.className='suggestion-sheet p-5';
-    content.innerHTML = '<h2 class="font-rounded text-title">' + (value === 'all' ? 'What to try next' : choices[0].title) + '</h2><p class="text-muted mt-2">Small play ideas to follow your child’s interests.</p>' + choices.map(function(s) { return '<section class="mt-5"><h3 class="font-rounded text-heading">' + s.title + '</h3><p class="text-body mt-2">' + s.detail + '</p><button class="btn-secondary mt-3" data-play-add="' + s.kind + '">Log a ' + s.kind + '</button></section>'; }).join('') + '<button class="btn-primary mt-5 w-full" data-close-play>Done</button>';
-    var sheet=presentSheet(content);
-    content.querySelector('[data-close-play]').addEventListener('click',function() {sheet.dismiss();});
-    content.querySelectorAll('[data-play-add]').forEach(function(b) {b.addEventListener('click',function() {sheet.dismiss();openEntrySheet(null,b.dataset.playAdd);});});
+  function logRowHtml(e) {
+    var tone = e.language_name ? langTone(e.language_name) : KINDS[e.kind].tone;
+    var note = e.sounds_like ? (e.kind === 'sign' ? e.sounds_like : '“' + e.sounds_like + '”') : (e.note || '');
+    return '<li><button type="button" class="entry-row" data-entry="' + e.id + '" aria-label="' + esc(entryAria(e)) + '">' +
+      masteryIcon(masteryOf(e), 26) +
+      '<span class="entry-main"><span class="entry-top"><span class="entry-word" style="font-size:17px">' + esc(e.label) + '</span>' +
+        '<span class="lang-chip ' + TINT[tone] + ' ' + INK[tone] + '">' + esc(e.language_name || KINDS[e.kind].one) + '</span>' +
+        (e.is_demo ? '<span class="lang-chip tint-sage ink-sage">Staging demo</span>' : '') + '</span>' +
+        (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + '</span>' +
+      '<span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span></button></li>';
   }
 
-  function rowHtml(e) {
-    var k = KINDS[e.kind];
-    // Whole literals so the Tailwind extractor sees the classes (a class
-    // built by concatenation is invisible to it and gets tree-shaken).
-    var blkClass = { word: 'blk-word', sound: 'blk-sound', sign: 'blk-sign' }[e.kind];
-    var subParts = [];
-    if (e.sounds_like) {
-      subParts.push(e.kind === 'sign'
-        ? esc(e.sounds_like)
-        : '<span class="says">“' + esc(e.sounds_like) + '”</span>');
+  // ── Entry detail ─────────────────────────────────────────────────────
+  function entryHtml() {
+    var e = state.entries.find(function (x) { return x.id === state.entryId; });
+    if (!e) {
+      return '<header class="page-head"><button type="button" class="round-btn" data-page="log" aria-label="Back to the log">' + icon('back', 22) + '</button></header>' +
+        '<div class="state-empty">' + icon('search', 48) + '<h1 class="font-display" style="font-size:20px;font-weight:600" tabindex="-1">This entry isn’t here any more.</h1><p class="sub">It may have been deleted.</p><button type="button" class="btn-secondary" data-page="log">Back to the log</button></div>';
     }
-    if (e.is_demo) subParts.push('Staging demo');
-    var sub = subParts.length
-      ? '<span class="mt-0.5 block truncate text-small text-muted">' + subParts.join(' · ') + '</span>'
-      : '';
-    var aria = k.one + ': ' + e.label +
-      (e.sounds_like ? ', ' + (k.verb ? k.verb + ' ' : '') + e.sounds_like : '') +
-      (e.mastered ? ', mastered' : '') +
-      (e.language_name ? ', ' + e.language_name : '') + ', ' + fmtLong(e.said_on);
+    var name = state.child.name;
+    var tone = e.language_name ? langTone(e.language_name) : KINDS[e.kind].tone;
+    var level = masteryOf(e);
+    var says = e.sounds_like
+      ? (e.kind === 'sign' ? esc(name) + ' signs it: ' + esc(e.sounds_like) : esc(name) + ' says <i>“' + esc(e.sounds_like) + '”</i>')
+      : 'Noticed ' + esc(fmtLong(e.said_on));
+    var history = Array.isArray(e.mastery_history) && e.mastery_history.length
+      ? e.mastery_history.slice() : [{ level: level, on: e.said_on }];
+    var age = formatAge(ageMonths(state.child.birthday, e.said_on), name);
     return '' +
-'<li class="list-row first-row p-0">' +
-'  <button type="button" class="row-btn" data-entry="' + e.id + '" aria-label="' + esc(aria) + '">' +
-'    <span class="blk ' + blkClass + '" aria-hidden="true">' + entryArt(e) + (e.mastered ? MAST_BADGE : '') + '</span>' +
-'    <span class="min-w-0 flex-1">' +
-'      <span class="entry-title block truncate">' + esc(e.label) + '</span>' +
-      '<span class="type-pill tone-' + e.kind + '">' + k.one + '</span>' + sub +
-'    </span>' +
-'    <span class="flex-none text-right text-small text-muted">' +
-'      <span class="block">' + esc(fmtShort(e.said_on)) + '</span>' +
-    (e.language_name ? '<span class="block">' + esc(e.language_name) + '</span>' : '') +
-'    </span><span class="row-chevron" aria-hidden="true">›</span>' +
-'  </button>' +
-'</li>';
+'<header class="page-head" style="align-items:center"><button type="button" class="round-btn" data-page="log" aria-label="Back to the log">' + icon('back', 22) + '</button>' +
+'  <button type="button" class="pill-btn" data-edit-entry="' + e.id + '">' + icon('edit', 22) + 'Edit</button></header>' +
+'<section class="detail-hero ' + TINT[tone] + '">' + icon(entryIconName(e), 92, { fill: 'white', cls: 'ico-hero' }) +
+'  <span class="detail-kicker ' + INK[tone] + '">' + KINDS[e.kind].one + (e.language_name ? ' · ' + esc(e.language_name) : '') + '</span>' +
+'  <h1 class="detail-word" tabindex="-1">' + esc(e.label) + '</h1>' +
+'  <p class="detail-says ' + INK[tone] + '">' + says + '</p>' +
+'</section>' +
+'<dl class="info-card">' +
+'  <div class="info-row"><dt>First noticed</dt><dd>' + esc(fmtFull(e.said_on)) + ' · ' + esc(age) + '</dd></div>' +
+'  <div class="info-row"><dt>Mastery</dt><dd>' + icon(MASTERY[level].icon, 26) + MASTERY[level].label + '</dd></div>' +
+      (e.note ? '<div class="info-block"><dt>Notes</dt><dd>' + esc(e.note) + '</dd></div>' : '') +
+      (e.is_demo ? '<div class="info-row"><dt>Source</dt><dd>Staging demo</dd></div>' : '') +
+'</dl>' +
+'<section class="journey"><h2>' + esc(name) + '’s journey with this ' + (e.kind === 'sign' ? 'sign' : e.kind === 'sound' ? 'sound' : 'word') + '</h2>' +
+      history.slice().reverse().map(function (step) {
+        var m = MASTERY[step.level] || MASTERY.emerging;
+        return '<div class="journey-step">' + icon(m.icon, 34) + '<div><b>' + m.label + '</b> <span>· ' + esc(fmtShort(step.on)) + '</span></div></div>';
+      }).join('') +
+'</section>' +
+'<button type="button" class="btn-danger" data-delete-entry="' + e.id + '">' + icon('trash', 22) + 'Delete entry</button>';
+  }
+
+  // ── Insights ─────────────────────────────────────────────────────────
+  var SUGGESTIONS = [
+    { tag: 'Words · bath time', title: 'Name what floats', icon: 'duck', tone: 'blush', kind: 'word',
+      body: function (n) { return 'Name each toy as it bobs up, in every language you speak at home. Pause and let ' + n + ' try first.'; },
+      detail: 'Hold up one toy at a time and name it slowly, then wait. Repeat whatever comes back as if it was perfect, then say the whole word once more. Try the same toy in each of your languages on different days.' },
+    { tag: 'Signs · snack time', title: 'Sign and say together', icon: 'wave', tone: 'butter', kind: 'sign',
+      body: function () { return 'Pair “more” and “all done” with the spoken words so both stick.'; },
+      detail: 'Make the sign and say the word at the same moment, every time the moment comes up. There is no need to ask for the sign back. Respond warmly to any way your child lets you know.' },
+    { tag: 'Sounds · anytime', title: 'Leave a gap in the song', icon: 'music', tone: 'sky', kind: 'sound',
+      body: function (n) { return 'Sing a favorite and stop before the last word or animal sound. Wait, ' + n + ' may fill it in.'; },
+      detail: 'Pick a song with animals or a repeating line. After a few rounds, pause before the last sound and look expectant. A moo, a clap or a giggle all count as taking a turn.' },
+  ];
+  function insightsHtml() {
+    var name = state.child.name;
+    var data = window.RiloInsights.summarize(state.entries, todayIso());
+    var shown = data.growth.slice(-7);
+    var current = shown[shown.length - 1];
+    var max = Math.max(1, data.total);
+    var monthName = MONTH_NAMES[Number(current.key.slice(5)) - 1];
+    var chartDesc = 'Words, sounds and signs in total by month: ' + shown.map(function (m) {
+      return MONTH_NAMES[Number(m.key.slice(5)) - 1] + ' ' + m.total;
+    }).join(', ');
+    var langTotal = data.byLanguage.reduce(function (s, l) { return s + l.count; }, 0) || 1;
+    return '' +
+'<header class="page-head"><div><p class="eyebrow">' + esc(name) + ' · ' + esc(formatAge(ageMonths(state.child.birthday, todayIso()), name)) + '</p>' +
+'  <h1 class="h-display" tabindex="-1">Insights</h1></div>' + icon('sparkle', 56) + '</header>' +
+'<section class="growth-card" aria-labelledby="growth-h"><div class="growth-top"><div><h2 id="growth-h" class="card-label">Word growth</h2>' +
+'  <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px;flex-wrap:wrap"><span class="growth-big">+' + current.added + '</span><span class="sub" style="font-size:14px">new in ' + monthName + '</span></div></div>' +
+'  <span class="pill-sage" style="font-size:12px">Total ' + data.total + '</span></div>' +
+'  <div class="growth-chart" role="img" aria-label="' + esc(chartDesc) + '">' +
+      shown.map(function (m, i) {
+        var now = i === shown.length - 1;
+        return '<div class="bar-col"><span class="bar-val' + (now ? ' bar-val-now' : '') + '">' + m.total + '</span>' +
+          '<div class="bar' + (now ? ' bar-now' : '') + '" style="height:' + Math.max(4, Math.round(m.total / max * 130)) + 'px"></div></div>';
+      }).join('') +
+'  </div><div class="bar-labels" aria-hidden="true">' + shown.map(function (m) { return '<span>' + MONTH_NAMES[Number(m.key.slice(5)) - 1].slice(0, 3) + '</span>'; }).join('') + '</div>' +
+'  <details class="chart-table"><summary>Month by month' + (data.growth.length > 7 ? ' · full history' : '') + '</summary><table><thead><tr><th>Month</th><th>New</th><th>Total</th></tr></thead><tbody>' +
+      data.growth.slice().reverse().map(function (m) {
+        return '<tr><td>' + MONTH_NAMES[Number(m.key.slice(5)) - 1] + ' ' + m.key.slice(0, 4) + '</td><td>' + m.added + '</td><td>' + m.total + '</td></tr>';
+      }).join('') + '</tbody></table></details>' +
+'</section>' +
+'<section class="lang-card" aria-labelledby="lang-h"><h2 id="lang-h" class="card-label">By language</h2>' +
+      (data.byLanguage.length
+        ? '<div class="lang-stack" role="img" aria-label="' + esc(data.byLanguage.map(function (l) { return l.name + ' ' + l.count; }).join(', ')) + '">' +
+            data.byLanguage.map(function (l) { return '<span class="' + SWATCH[l.assigned ? langTone(l.name) : 'sage'] + '" style="flex:' + l.count + '"></span>'; }).join('') + '</div>' +
+          '<div>' + data.byLanguage.map(function (l) {
+            return '<button type="button" class="lang-row" data-filter-to="lang:' + esc(l.name.toLowerCase()) + '">' +
+              '<span class="swatch ' + SWATCH[l.assigned ? langTone(l.name) : 'sage'] + '"></span><span class="lang-name">' + esc(l.name) + '</span>' +
+              '<span class="lang-pct">' + Math.round(l.count / langTotal * 100) + '%</span><span class="lang-num">' + l.count + '</span></button>';
+          }).join('') + '</div>' +
+          '<p class="note-box">A word that ' + esc(name) + ' says in two languages counts once in each, like <b>water</b> and <b>agua</b>.</p>'
+        : '<p class="sub">Languages show here once entries have one.</p>') +
+'</section>' +
+'<section class="flex flex-col gap-3" aria-labelledby="mastery-h"><h2 id="mastery-h" class="card-label" style="padding:0 4px">Mastery</h2>' +
+'  <div class="mastery-grid">' + ['mastered', 'practicing', 'emerging'].map(function (l) {
+        return '<button type="button" class="m-tile" data-filter-to="' + l + '">' + icon(MASTERY[l].icon, 34) +
+          '<span class="m-count">' + data.mastery[l] + '</span><span class="m-name">' + MASTERY[l].label + '</span></button>';
+      }).join('') + '</div></section>' +
+'<section class="flex flex-col gap-3" aria-labelledby="play-h"><h2 id="play-h" class="font-display" style="font-size:20px;font-weight:600;padding:4px 4px 0">Play ideas for this week</h2>' +
+      SUGGESTIONS.map(function (s, i) {
+        return '<button type="button" class="play-card" data-suggestion="' + i + '"><span class="play-icon ' + TINT[s.tone] + '">' + icon(s.icon, 40, { fill: 'white' }) + '</span>' +
+          '<span><span class="play-tag ' + INK[s.tone] + '">' + s.tag + '</span><span class="play-title" style="display:block">' + s.title + '</span>' +
+          '<span class="play-body" style="display:block">' + esc(s.body(name)) + '</span></span></button>';
+      }).join('') +
+'  <p class="fine-print">Every child finds words at their own pace. These are ideas, not targets.</p>' +
+'</section>';
+  }
+
+  function openSuggestion(value) {
+    var s = SUGGESTIONS[Number(value)];
+    var content = document.createElement('div');
+    content.innerHTML = '' +
+      '<div class="sheet-head"><span style="width:44px"></span><h2 class="sheet-title">Play idea</h2><span style="width:44px"></span></div>' +
+      '<div class="flex flex-col gap-3"><span class="play-icon ' + TINT[s.tone] + '">' + icon(s.icon, 40, { fill: 'white' }) + '</span>' +
+      '<span class="play-tag ' + INK[s.tone] + '">' + s.tag + '</span>' +
+      '<h3 class="font-display" style="font-size:24px;font-weight:600">' + s.title + '</h3>' +
+      '<p class="sub">' + esc(s.detail) + '</p>' +
+      '<button type="button" class="btn-secondary" data-play-add>Log a ' + s.kind + '</button>' +
+      '<button type="button" class="btn-primary" data-close-play>Done</button></div>';
+    var sheet = presentSheet(content);
+    content.querySelector('[data-close-play]').addEventListener('click', function () { sheet.dismiss(); });
+    content.querySelector('[data-play-add]').addEventListener('click', function () { sheet.dismiss(); openEntrySheet(null, s.kind); });
+  }
+
+  // ── Profile ──────────────────────────────────────────────────────────
+  function profileHtml() {
+    var name = state.child.name;
+    var langs = languagesUsed();
+    return '' +
+'<header class="page-head"><div><p class="eyebrow">Profile</p><h1 class="h-display" tabindex="-1">A little about ' + esc(name) + '</h1></div></header>' +
+'<section class="profile-card">' + icon('cow', 84) + '<h2>' + esc(name) + '</h2>' +
+'  <p>' + esc(formatAge(ageMonths(state.child.birthday, todayIso()), name)) + ' today</p>' +
+'  <p>Born ' + esc(MONTH_NAMES[Number(state.child.birthday.slice(5, 7)) - 1]) + ' ' + esc(state.child.birthday.slice(0, 4)) + '</p>' +
+'  <button type="button" id="edit-child" class="btn-primary">Edit child profile</button></section>' +
+'<section class="profile-about"><h2>' + esc(name) + '’s language story</h2>' +
+'  <p>' + state.entries.length + (state.entries.length === 1 ? ' entry' : ' entries') + ' · ' + langs.length + (langs.length === 1 ? ' language' : ' languages') + '</p>' +
+      (langs.length ? '<div class="chips-row">' + langs.map(function (l) { var t = langTone(l); return '<span class="lang-chip ' + TINT[t] + ' ' + INK[t] + '" style="font-size:13px;padding:6px 12px">' + esc(l) + '</span>'; }).join('') + '</div>' : '') +
+'  <p>Words, sounds and signs are tracked side by side. Mastery is yours to set: emerging, practicing or mastered.</p>' +
+'  <button type="button" class="btn-secondary" data-page="insights">See insights</button></section>';
   }
 
   // ── Events on the rendered screen ─────────────────────────────────────
   function bind() {
-    app.querySelectorAll('button[data-page]').forEach(function(btn) { btn.addEventListener('click',function() {navigate(btn.dataset.page);}); });
-    app.querySelectorAll('[data-log]').forEach(function(btn) { btn.addEventListener('click',function() {navigate('log',btn.dataset.log==='all' ? null : btn.dataset.log);}); });
-    app.querySelectorAll('[data-insight-filter]').forEach(function(btn) { btn.addEventListener('click',function() {var f=btn.dataset.insightFilter; navigate('log', ['sign','sound'].includes(f) ? f : 'word', ['sign','sound'].includes(f) ? '' : f);}); });
-    app.querySelectorAll('[data-month-kind]').forEach(function(btn) { btn.addEventListener('click',function() {navigate('log',btn.dataset.monthKind,'month');}); });
-    app.querySelectorAll('[data-suggestion]').forEach(function(btn) {btn.addEventListener('click',function() {openSuggestion(btn.dataset.suggestion);});});
-    var search=app.querySelector('#word-search');
-    if(search) search.addEventListener('input',function() {state.search=search.value;app.querySelector('#firsts-area').innerHTML=listHtml();bindEntryRows();});
-    var clear=app.querySelector('[data-clear-filter]');
-    if(clear) clear.addEventListener('click',function() {state.filter='';render();});
+    app.querySelectorAll('[data-page]').forEach(function (btn) {
+      btn.addEventListener('click', function () { navigate(btn.getAttribute('data-page')); });
+    });
+    app.querySelectorAll('[data-kind-card]').forEach(function (btn) {
+      btn.addEventListener('click', function () { navigate('log', { filter: btn.getAttribute('data-kind-card') }); });
+    });
+    app.querySelectorAll('[data-filter-to]').forEach(function (btn) {
+      btn.addEventListener('click', function () { navigate('log', { filter: btn.getAttribute('data-filter-to') }); });
+    });
+    app.querySelectorAll('[data-filter]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.filter = btn.getAttribute('data-filter');
+        render();
+        var again = app.querySelector('[data-filter="' + CSS.escape(state.filter) + '"]');
+        if (again) again.focus();
+      });
+    });
+    app.querySelectorAll('[data-suggestion]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openSuggestion(btn.getAttribute('data-suggestion')); });
+    });
+    var search = app.querySelector('#word-search');
+    if (search) search.addEventListener('input', function () {
+      state.search = search.value;
+      app.querySelector('#firsts-area').innerHTML = listHtml();
+      app.querySelector('[data-log-count]').textContent = logCount();
+      bindEntryRows();
+    });
     var retry = app.querySelector('#retry');
     if (retry) retry.addEventListener('click', loadState);
 
     var setupForm = app.querySelector('#setup-form');
-    if (setupForm) setupForm.addEventListener('submit', onSetupSubmit);
-
-    app.querySelectorAll('[data-kind-card]').forEach(function(btn) {
-      btn.addEventListener('click',function() {navigate('log',btn.dataset.kindCard);});
-    });
+    if (setupForm) bindSetup(setupForm);
 
     var addFirst = app.querySelector('#add-first');
-    if (addFirst) addFirst.addEventListener('click', function () { openEntrySheet(null); });
-    app.querySelectorAll('[data-add-kind]').forEach(function (btn) {
-      btn.onclick = function () { openEntrySheet(null, btn.getAttribute('data-add-kind')); };
+    if (addFirst) addFirst.addEventListener('click', function () {
+      openEntrySheet(null, KINDS[state.filter] && state.page === 'log' ? state.filter : 'word');
+    });
+
+    var editEntry = app.querySelector('[data-edit-entry]');
+    if (editEntry) editEntry.addEventListener('click', function () {
+      var e = state.entries.find(function (x) { return x.id === Number(editEntry.getAttribute('data-edit-entry')); });
+      if (e) openEntrySheet(e);
+    });
+    var del = app.querySelector('[data-delete-entry]');
+    if (del) del.addEventListener('click', function () {
+      var e = state.entries.find(function (x) { return x.id === Number(del.getAttribute('data-delete-entry')); });
+      if (e) deleteEntry(e);
     });
 
     var quickAdd = app.querySelector('#quick-add');
@@ -869,7 +1027,13 @@
         var id = chip.getAttribute('data-quick');
         if (state.quickPick[id]) delete state.quickPick[id];
         else state.quickPick[id] = true;
-        render();
+        var on = !!state.quickPick[id];
+        chip.classList.toggle('chip-on', on);
+        chip.setAttribute('aria-pressed', String(on));
+        var n = Object.keys(state.quickPick).length;
+        var add = app.querySelector('#quick-add');
+        add.disabled = !n;
+        add.textContent = n ? (n === 1 ? 'Add 1 entry' : 'Add ' + n + ' entries') : 'Add entries';
       });
     });
 
@@ -879,11 +1043,11 @@
     bindEntryRows();
   }
   function bindEntryRows() {
-    app.querySelectorAll('[data-entry]').forEach(function(btn) {
-      btn.onclick=function() {var entry=state.entries.find(function(e) {return e.id===Number(btn.dataset.entry);});if(entry) openEntrySheet(entry);};
+    app.querySelectorAll('[data-entry]').forEach(function (btn) {
+      btn.onclick = function () { navigate('entry', { entryId: Number(btn.getAttribute('data-entry')) }); };
     });
-    app.querySelectorAll('#firsts-area [data-add-kind]').forEach(function(btn) {
-      btn.onclick=function() {openEntrySheet(null,btn.dataset.addKind);};
+    app.querySelectorAll('[data-add-kind]').forEach(function (btn) {
+      btn.onclick = function () { openEntrySheet(null, btn.getAttribute('data-add-kind')); };
     });
   }
 
@@ -894,6 +1058,59 @@
     el.hidden = false;
   }
 
+  // The welcome form. Chips toggle in place, so a typed name is never lost.
+  function bindSetup(form) {
+    var nameEl = form.querySelector('#setup-name');
+    var go = form.querySelector('[data-setup-go]');
+    function goLabel() {
+      var n = nameEl.value.trim();
+      go.innerHTML = esc(n ? 'Start ' + n + '’s word list' : 'Start the word list') + ' ' + icon('arrow', 20, { fill: 'none' });
+    }
+    nameEl.addEventListener('input', goLabel);
+    function bindChip(chip) {
+      chip.addEventListener('click', function () {
+        var name = chip.getAttribute('data-setup-lang');
+        var on = !state.setupLangs[name];
+        if (on) state.setupLangs[name] = true; else delete state.setupLangs[name];
+        chip.classList.toggle('chip-on', on);
+        chip.setAttribute('aria-pressed', String(on));
+      });
+    }
+    form.querySelectorAll('[data-setup-lang]').forEach(bindChip);
+    var area = form.querySelector('[data-setup-other-area]');
+    var other = form.querySelector('#setup-other');
+    form.querySelector('[data-setup-other]').addEventListener('click', function () {
+      area.hidden = false;
+      other.focus();
+    });
+    function addOther() {
+      var v = other.value.trim().slice(0, 30);
+      if (!v) { other.focus(); return; }
+      var exists = SETUP_LANGS.concat(state.setupExtra).find(function (l) { return l.toLowerCase() === v.toLowerCase(); });
+      var name = exists || v;
+      if (!exists) {
+        state.setupExtra.push(v);
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip';
+        chip.setAttribute('data-setup-lang', v);
+        chip.setAttribute('aria-pressed', 'false');
+        chip.textContent = v;
+        form.querySelector('[data-setup-other]').before(chip);
+        bindChip(chip);
+      }
+      if (!state.setupLangs[name]) {
+        var target = Array.from(form.querySelectorAll('[data-setup-lang]')).find(function (c) { return c.getAttribute('data-setup-lang') === name; });
+        if (target) target.click();
+      }
+      other.value = '';
+      area.hidden = true;
+    }
+    form.querySelector('[data-setup-other-add]').addEventListener('click', addOther);
+    other.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addOther(); } });
+    form.addEventListener('submit', onSetupSubmit);
+  }
+
   async function onSetupSubmit(event) {
     event.preventDefault();
     var nameEl = app.querySelector('#setup-name');
@@ -901,25 +1118,34 @@
     errEl.hidden = true;
     var name = nameEl.value.trim();
     if (!name) {
-      errEl.textContent = "Add the child's name.";
+      errEl.textContent = 'Add your child’s name.';
       errEl.hidden = false;
+      nameEl.focus();
       return;
     }
-    var birthMonth = app.querySelector('#setup-year').value + '-' +
-      app.querySelector('#setup-month').value;
-    var button = app.querySelector('#setup-form button[type="submit"]');
+    var birthMonth = app.querySelector('#setup-year').value + '-' + app.querySelector('#setup-month').value;
+    var button = app.querySelector('[data-setup-go]');
     button.disabled = true;
     try {
       var child = await api('/api/child', {
         method: 'PUT',
         body: JSON.stringify({ name: name, birth_month: birthMonth }),
       });
+      // The languages at home become the family's languages, ready to pick.
+      var picked = Object.keys(state.setupLangs);
+      for (var i = 0; i < picked.length; i++) {
+        var lang = await api('/api/languages', { method: 'POST', body: JSON.stringify({ name: picked[i] }) });
+        if (!state.languages.some(function (l) { return l.id === lang.id; })) {
+          state.languages.push(Object.assign({ uses: 0, is_demo: false }, lang));
+        }
+      }
       state.child = child;
       state.quickPick = {};
       // Straight into the quick start, so a family arriving with a child
       // who already talks can load what they know in one go.
       state.screen = 'quickstart';
       render();
+      window.scrollTo({ top: 0 });
     } catch (err) {
       showFormError(errEl, err);
       button.disabled = false;
@@ -945,13 +1171,9 @@
     var button = app.querySelector('#quick-add');
     button.disabled = true;
     try {
-      var saved = await api('/api/quick-start', {
-        method: 'POST',
-        body: JSON.stringify({ items: items }),
-      });
-      state.entries = saved.entries || [];
+      await api('/api/quick-start', { method: 'POST', body: JSON.stringify({ items: items }) });
       state.screen = 'app';
-      render();
+      await refreshState();
       toast('Added ' + items.length + (items.length === 1 ? ' entry' : ' entries'));
     } catch (err) {
       showFormError(errEl, err);
@@ -986,6 +1208,22 @@
     render();
   }
 
+  async function deleteEntry(entry) {
+    var ok = await confirmDialog(
+      'Delete “' + entry.label + '”?',
+      'This removes it from ' + state.child.name + '’s log and word count. Its notes and journey go too.');
+    if (!ok) return;
+    try {
+      await api('/api/entries/' + entry.id, { method: 'DELETE' });
+      state.entries = state.entries.filter(function (e) { return e.id !== entry.id; });
+      toast('Deleted ' + entry.label);
+      navigate('log');
+      refreshState().catch(function () {});
+    } catch (err) {
+      toast(err.code === 'account_required' ? 'Make an account to keep entries.' : (err.message || 'Could not delete it. Try again.'));
+    }
+  }
+
   // ── The child sheet ──────────────────────────────────────────────────
   function openChildSheet() {
     var name = state.child.name;
@@ -993,21 +1231,16 @@
     var yyyy = Number(state.child.birthday.slice(0, 4));
     var content = document.createElement('form');
     content.novalidate = true;
-    content.className = 'pt-1';
     content.innerHTML = '' +
-'<div class="relative mb-4 flex items-center justify-between">' +
-'  <button type="button" class="min-h-11 px-1 font-medium text-fg" data-cancel>Cancel</button>' +
-'  <h2 class="absolute left-1/2 -translate-x-1/2 font-rounded text-heading">Edit details</h2>' +
-'</div>' +
-'<label class="mb-1 block text-small font-medium" for="child-name">Name</label>' +
-'<input id="child-name" class="field" type="text" maxlength="40" autocomplete="off" value="' + esc(name) + '">' +
-'<label class="mb-1 mt-4 block text-small font-medium" for="child-month">Birth month</label>' +
-    monthSelectHtml('child-month', mm) +
-'<label class="mb-1 mt-4 block text-small font-medium" for="child-year">Birth year</label>' +
-    yearSelectHtml('child-year', yyyy) +
-'<p class="mt-1 text-small text-muted">Ages count from the birth month.</p>' +
-'<p data-form-error hidden class="mt-2 text-small text-danger"></p>' +
-'<button type="submit" class="btn-primary mt-4 w-full">Save changes</button>';
+'<div class="sheet-head"><button type="button" class="link-btn" data-cancel>Cancel</button><h2 class="sheet-title">Edit details</h2><span style="width:44px"></span></div>' +
+'<div class="flex flex-col gap-4">' +
+'<div><label class="field-label" for="child-name">Name</label>' +
+'<input id="child-name" class="field" type="text" maxlength="40" autocomplete="off" value="' + esc(name) + '"></div>' +
+'<div class="grid grid-cols-2 gap-3"><div><label class="field-label" for="child-month">Birth month</label>' + monthSelectHtml('child-month', mm) + '</div>' +
+'<div><label class="field-label" for="child-year">Year</label>' + yearSelectHtml('child-year', yyyy) + '</div></div>' +
+'<p class="sub" style="font-size:13px">Ages count from the birth month.</p>' +
+'<p data-form-error hidden class="form-error"></p>' +
+'<button type="submit" class="btn-primary">Save changes</button></div>';
     var errEl = content.querySelector('[data-form-error]');
     var sheet = presentSheet(content, null);
     content.querySelector('[data-cancel]').addEventListener('click', function () { sheet.dismiss(); });
@@ -1016,12 +1249,11 @@
       errEl.hidden = true;
       var nextName = content.querySelector('#child-name').value.trim();
       if (!nextName) {
-        errEl.textContent = "Add the child's name.";
+        errEl.textContent = 'Add your child’s name.';
         errEl.hidden = false;
         return;
       }
-      var birthMonth = content.querySelector('#child-year').value + '-' +
-        content.querySelector('#child-month').value;
+      var birthMonth = content.querySelector('#child-year').value + '-' + content.querySelector('#child-month').value;
       var button = content.querySelector('button[type="submit"]');
       button.disabled = true;
       try {
@@ -1045,43 +1277,42 @@
   function openEntrySheet(entry, presetKind) {
     if (!state.child) return;
     var isEdit = !!entry;
+    var kind = isEdit ? entry.kind : (presetKind || 'word');
     var form = {
-      kind: isEdit
-        ? entry.kind
-        : (presetKind || state.tab || 'word'),
-      languageId: isEdit ? (entry.language_id || null) : defaultLanguageId(
-        presetKind || state.tab || 'word'),
-      // A first word is usually said partially at first, so "still
-      // learning" is the default; the toggle marks it mastered when the
-      // whole word is there (the creator's ask).
-      mastered: isEdit ? entry.mastered === true : false,
+      kind: kind,
+      languageId: isEdit ? (entry.language_id || null) : defaultLanguageId(kind),
+      // A first is usually only partly there at the start, so a new one
+      // begins as emerging.
+      mastery: isEdit ? masteryOf(entry) : 'emerging',
       newLang: false,
     };
 
     var content = document.createElement('form');
     content.novalidate = true;
-    content.className = 'pt-1';
     content.innerHTML = entrySheetHtml(entry, form);
     var sheet = presentSheet(content, null);
     var errEl = content.querySelector('[data-form-error]');
+    var name = state.child.name;
 
     function labels() {
       var k = KINDS[form.kind];
-      var name = state.child.name;
-      content.querySelector('[data-kind-title]').textContent = isEdit ? 'Edit entry' : 'Add an entry';
       content.querySelector('[data-label-the]').textContent = k.the;
       content.querySelector('[data-label-input]').placeholder = k.eg;
-      content.querySelector('[data-label-how]').innerHTML = esc(k.how(name)) +
-        ' <span class="font-normal text-muted">optional</span>';
+      content.querySelector('[data-label-how]').innerHTML = esc(k.how(name)) + ' <span style="font-weight:400">optional</span>';
+      content.querySelector('[data-how-input]').placeholder = k.hint;
+      content.querySelector('[data-how-input]').classList.toggle('says', form.kind !== 'sign');
       content.querySelectorAll('[data-kind]').forEach(function (btn) {
-        btn.classList.toggle('on', btn.getAttribute('data-kind') === form.kind);
-        btn.setAttribute('aria-checked', String(btn.getAttribute('data-kind') === form.kind));
+        var key = btn.getAttribute('data-kind');
+        var on = key === form.kind;
+        btn.classList.toggle('on', on);
+        btn.setAttribute('aria-checked', String(on));
+        btn.innerHTML = icon(KINDS[key].icon, 22, { fill: on ? KINDS[key].tone : 'none' }) + KINDS[key].one;
       });
     }
 
     function mastery() {
       content.querySelectorAll('[data-mastery]').forEach(function (btn) {
-        var on = (btn.getAttribute('data-mastery') === 'yes') === form.mastered;
+        var on = btn.getAttribute('data-mastery') === form.mastery;
         btn.classList.toggle('on', on);
         btn.setAttribute('aria-checked', String(on));
       });
@@ -1092,7 +1323,8 @@
       if (form.newLang) {
         holder.innerHTML = '' +
 '<div class="flex items-center gap-2">' +
-'  <input data-new-lang-name class="field flex-1" type="text" maxlength="30" autocomplete="off" placeholder="e.g. Spanish">' +
+'  <label class="sr-only" for="new-lang">New language</label>' +
+'  <input id="new-lang" data-new-lang-name class="field" type="text" maxlength="30" autocomplete="off" placeholder="e.g. Portuguese">' +
 '  <button type="button" class="btn-secondary" data-new-lang-add>Add</button>' +
 '</div>';
         var input = holder.querySelector('[data-new-lang-name]');
@@ -1101,10 +1333,7 @@
           var value = input.value.trim();
           if (!value) { input.focus(); return; }
           try {
-            var lang = await api('/api/languages', {
-              method: 'POST',
-              body: JSON.stringify({ name: value }),
-            });
+            var lang = await api('/api/languages', { method: 'POST', body: JSON.stringify({ name: value }) });
             if (!state.languages.some(function (l) { return l.id === lang.id; })) {
               state.languages.push(Object.assign({ uses: 0, is_demo: false }, lang));
               state.sessionLangs.push(lang.id);
@@ -1113,9 +1342,7 @@
             form.newLang = false;
             chips();
           } catch (err) {
-            toast(err.code === 'account_required'
-              ? 'Make an account to keep entries.'
-              : (err.message || 'Could not add the language.'));
+            toast(err.code === 'account_required' ? 'Make an account to keep entries.' : (err.message || 'Could not add the language.'));
           }
         };
         holder.querySelector('[data-new-lang-add]').addEventListener('click', submit);
@@ -1124,7 +1351,7 @@
         });
         return;
       }
-      holder.innerHTML = '<div class="flex flex-wrap gap-2">' + chipListHtml(form) + '</div>';
+      holder.innerHTML = '<div class="chips-row" role="radiogroup" aria-label="Language">' + chipListHtml(form) + '</div>';
       holder.querySelectorAll('[data-lang]').forEach(function (chip) {
         chip.addEventListener('click', function () {
           var id = Number(chip.getAttribute('data-lang'));
@@ -1142,8 +1369,7 @@
       var hint = content.querySelector('[data-age-hint]');
       var value = content.querySelector('[data-date]').value;
       if (!value) { hint.hidden = true; return; }
-      hint.textContent = state.child.name + ' was ' +
-        formatAge(ageMonths(state.child.birthday, value), state.child.name);
+      hint.textContent = name + ' was ' + formatAge(ageMonths(state.child.birthday, value), name);
       hint.hidden = false;
     }
 
@@ -1163,7 +1389,7 @@
     });
     content.querySelectorAll('[data-mastery]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        form.mastered = btn.getAttribute('data-mastery') === 'yes';
+        form.mastery = btn.getAttribute('data-mastery');
         mastery();
       });
     });
@@ -1179,13 +1405,11 @@
         language_id: form.languageId,
         said_on: content.querySelector('[data-date]').value,
         note: content.querySelector('[data-note]').value,
-        mastered: form.mastered,
+        mastery: form.mastery,
+        mastered: form.mastery === 'mastered',
       };
-      var k = KINDS[form.kind];
       if (!payload.label.trim()) {
-        errEl.textContent = form.kind === 'sound'
-          ? 'Name the animal or thing.'
-          : form.kind === 'sign' ? 'Write the sign.' : 'Write the word.';
+        errEl.textContent = form.kind === 'sound' ? 'Name the animal or thing.' : form.kind === 'sign' ? 'Write what the sign means.' : 'Write the word.';
         errEl.hidden = false;
         return;
       }
@@ -1194,8 +1418,8 @@
         errEl.hidden = false;
         return;
       }
-      // The category picks the illustration on the block; it follows the
-      // word itself, so it is not a field the parent fills in.
+      // The category follows the word itself, so it is not a field the
+      // parent fills in.
       payload.category = inferCategory(payload.label);
       var button = content.querySelector('[data-save]');
       button.disabled = true;
@@ -1214,97 +1438,65 @@
       }
     });
 
-    if (isEdit) {
-      content.querySelector('[data-delete]').addEventListener('click', async function () {
-        var ok = await confirmDialog(
-          'Delete “' + entry.label + '”?',
-          'This removes it from ' + state.child.name + "'s entries.");
-        if (!ok) return;
-        try {
-          await api('/api/entries/' + entry.id, { method: 'DELETE' });
-          sheet.dismiss();
-          toast('Deleted ' + entry.label);
-          refreshState().catch(function () {});
-        } catch (err) {
-          showFormError(errEl, err);
-        }
-      });
-    }
-
     if (!isEdit) content.querySelector('[data-label-input]').focus({ preventScroll: true });
   }
 
   function entrySheetHtml(entry, form) {
     var isEdit = !!entry;
     var today = todayIso();
-    var kinds = ['word', 'sound', 'sign'];
-    var dots = { word: 'bg-word', sound: 'bg-sound', sign: 'bg-sign' };
+    var name = state.child.name;
     return '' +
-'<div class="relative mb-4 flex items-center justify-between">' +
-'  <button type="button" class="min-h-11 px-1 font-medium text-fg" data-cancel>Cancel</button>' +
-'  <h2 class="absolute left-1/2 -translate-x-1/2 font-rounded text-heading" data-kind-title></h2>' +
-'</div>' +
-'<div class="seg grid-cols-3" role="radiogroup" aria-label="Entry type">' +
-  kinds.map(function (kind) {
-    return '<button type="button" role="radio" aria-checked="false" data-kind="' + kind + '" class="' +
-      (form.kind === kind ? 'on' : '') + '">' +
-      '<span class="flex items-center gap-1.5"><i class="inline-block h-2 w-2 rounded-sm ' + dots[kind] + '" aria-hidden="true"></i>' +
-      KINDS[kind].one + '</span></button>';
+'<div class="sheet-head"><button type="button" class="link-btn" data-cancel>Cancel</button>' +
+'  <h2 class="sheet-title">' + (isEdit ? 'Edit entry' : 'New for ' + esc(name)) + '</h2><span style="width:44px"></span></div>' +
+'<div class="seg3" role="radiogroup" aria-label="Entry type">' +
+  ['word', 'sound', 'sign'].map(function (kind) {
+    return '<button type="button" role="radio" aria-checked="false" data-kind="' + kind + '"></button>';
   }).join('') +
 '</div>' +
-'<label class="mb-1 mt-4 block text-small font-medium" data-label-the></label>' +
-'<input data-label-input class="field" type="text" maxlength="60" autocomplete="off" value="' + (isEdit ? esc(entry.label) : '') + '">' +
-'<label class="mb-1 mt-4 block text-small font-medium" data-label-how></label>' +
-'<input data-how-input class="field says" type="text" maxlength="80" autocomplete="off" value="' + (isEdit ? esc(entry.sounds_like || '') : '') + '">' +
-'<label class="mb-1 mt-4 block text-small font-medium">Mastery</label>' +
-'<div class="seg grid-cols-2" role="radiogroup" aria-label="Mastery">' +
-'<button type="button" role="radio" aria-checked="false" data-mastery="no">Still learning</button>' +
-'<button type="button" role="radio" aria-checked="false" data-mastery="yes">Mastered</button>' +
+'<div class="form-card">' +
+'  <label class="field-label" style="margin:0" for="entry-label" data-label-the></label>' +
+'  <input id="entry-label" data-label-input class="big-input" type="text" maxlength="60" autocomplete="off" value="' + (isEdit ? esc(entry.label) : '') + '">' +
 '</div>' +
-'<p class="mt-1 text-small text-muted">Mastered means ' + esc(state.child.name) + ' says the whole ' +
-  (form.kind === 'sign' ? 'sign' : 'word') + ', not part of it.</p>' +
-'<label class="mb-1 mt-4 block text-small font-medium">Language <span class="font-normal text-muted">optional</span></label>' +
-'<div data-lang-area></div>' +
-'<label class="mb-1 mt-4 block text-small font-medium" for="entry-date">Date</label>' +
-'<input id="entry-date" data-date class="field" type="date" value="' + (isEdit ? esc(entry.said_on) : today) +
-  '" min="' + esc(state.child.birthday) + '" max="' + today + '">' +
-'<p data-age-hint class="mt-1 text-small text-muted"></p>' +
-'<label class="mb-1 mt-4 block text-small font-medium" for="entry-note">Note <span class="font-normal text-muted">optional</span></label>' +
-'<textarea id="entry-note" data-note class="field min-h-20" maxlength="280" placeholder="e.g. asked for it at bath time">' +
-  (isEdit ? esc(entry.note || '') : '') + '</textarea>' +
-'<p data-form-error hidden class="mt-2 text-small text-danger"></p>' +
-'<button type="submit" class="btn-primary mt-4 w-full" data-save>' + (isEdit ? 'Save changes' : 'Add entry') + '</button>' +
-    (isEdit
-      ? '<button type="button" class="btn-secondary mt-2 w-full text-danger" data-delete>Delete entry</button>'
-      : '');
+'<div class="mt-4"><p class="field-label" id="lang-label">Language <span style="font-weight:400">optional</span></p><div data-lang-area></div></div>' +
+'<div class="mt-4"><label class="field-label" for="entry-date" style="display:flex;align-items:center;gap:6px">' + icon('calendar', 20) + 'First noticed</label>' +
+'  <input id="entry-date" data-date class="field" type="date" value="' + (isEdit ? esc(entry.said_on) : today) +
+     '" min="' + esc(state.child.birthday) + '" max="' + today + '">' +
+'  <p data-age-hint class="sub mt-1" style="font-size:13px"></p></div>' +
+'<div class="mt-4"><label class="field-label" for="entry-how" data-label-how></label>' +
+'  <input id="entry-how" data-how-input class="field" type="text" maxlength="80" autocomplete="off" value="' + (isEdit ? esc(entry.sounds_like || '') : '') + '"></div>' +
+'<div class="mt-4"><label class="field-label" for="entry-note">Notes <span style="font-weight:400">optional</span></label>' +
+'  <textarea id="entry-note" data-note class="field" maxlength="280" placeholder="Where were you? What prompted it?">' + (isEdit ? esc(entry.note || '') : '') + '</textarea></div>' +
+'<fieldset class="mt-4"><legend class="field-label">How well does ' + esc(name) + ' use it?</legend>' +
+'  <div class="m-choice-grid" role="radiogroup" aria-label="Mastery">' +
+    ['emerging', 'practicing', 'mastered'].map(function (l) {
+      var m = MASTERY[l];
+      return '<button type="button" class="m-choice" role="radio" aria-checked="false" data-mastery="' + l + '">' + icon(m.icon, 34) + '<b>' + m.label + '</b><span>' + m.hint + '</span></button>';
+    }).join('') +
+'  </div></fieldset>' +
+'<p data-form-error hidden class="form-error mt-3"></p>' +
+'<button type="submit" class="btn-primary mt-5 w-full" data-save>' + (isEdit ? 'Save changes' : 'Save to ' + esc(name) + '’s words') + '</button>';
   }
 
-  // Language chips: the ones in use, most used first, then any created this
-  // session, then the entry's own language so an edit never loses it.
+  // Language chips: every family language, most used first, then the
+  // entry's own language so an edit never loses it.
   function chipListHtml(form) {
-    var ids = {};
-    var list = [];
-    state.languages
-      .filter(function (l) { return l.uses > 0; })
-      .sort(function (a, b) { return b.uses - a.uses || a.name.localeCompare(b.name); })
-      .forEach(function (l) { if (!ids[l.id]) { ids[l.id] = true; list.push(l); } });
-    state.languages.forEach(function (l) {
-      if (l.uses === 0 && state.sessionLangs.indexOf(l.id) !== -1 && !ids[l.id]) {
-        ids[l.id] = true; list.push(l);
-      }
-    });
-    if (form.languageId && !ids[form.languageId]) {
-      var own = state.languages.find(function (l) { return l.id === form.languageId; });
-      if (own) list.push(own);
-    }
+    var list = state.languages.slice().sort(function (a, b) { return b.uses - a.uses || a.name.localeCompare(b.name); });
     return list.map(function (l) {
-      return '<button type="button" class="chip ' + (form.languageId === l.id ? 'chip-on' : '') +
+      var on = form.languageId === l.id;
+      return '<button type="button" role="radio" aria-checked="' + on + '" class="chip' + (on ? ' ' + LANG_ON[langTone(l.name)] : '') +
         '" data-lang="' + l.id + '">' + esc(l.name) + '</button>';
     }).join('') +
-      '<button type="button" class="chip border-dashed text-muted" data-new-lang>' +
-      '<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>' +
-      'New language</button>';
+      '<button type="button" class="chip chip-dashed" data-new-lang>+ New language</button>';
   }
+
+  window.addEventListener('hashchange', function () {
+    if (state.screen !== 'app' || !state.child) return;
+    var p = pageFromHash();
+    if (p.page === state.page && p.entryId === state.entryId) return;
+    state.page = p.page;
+    state.entryId = p.entryId;
+    render();
+  });
 
   loadState();
 })();
