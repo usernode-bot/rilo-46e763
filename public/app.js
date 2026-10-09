@@ -1,10 +1,11 @@
-/* Rilo's client. Renders the whole screen into #app — setup, loading,
- * error, and the entries list — and opens the add/edit sheet, the child
- * sheet, the delete confirm and the toasts through the platform's
- * native UI kit (unNative), with a plain fallback when it is absent.
+/* Rilo's client. Renders the whole screen into #app (welcome, quick start,
+ * Home, Log, entry detail, Insights, profile, loading and error) and opens
+ * the add/edit sheet, the child sheet, the delete confirm and the toasts
+ * through the platform's native UI kit (unNative), with a plain fallback.
  *
- * Class names are written as whole literals so the Tailwind compiler sees
- * them (see the note in public/index.html). */
+ * The look is the creator's Rilo canvas: calm and airy, with the "Offset"
+ * icon style (a fine ink line over a pastel shape printed 2px off-register)
+ * and a cow mascot. Every icon is drawn by icon() from ICONS below. */
 (function () {
   'use strict';
 
@@ -17,11 +18,6 @@
   var WITH_DEMO = pageQuery.get('demo') === '1';
 
   var app = document.getElementById('app');
-
-  var ICON_PLUS =
-    '<svg viewBox="0 0 24 24" class="h-5 w-5 flex-none" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
-  var ICON_PENCIL =
-    '<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
 
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -52,6 +48,127 @@
         return body;
       });
     });
+  }
+
+  // ── Offset icons ──────────────────────────────────────────────────────
+  // Each icon is drawn on a 48-unit grid: `f` is the pastel shape (printed
+  // 2 units down-right), `i` the ink line, `d` solid ink dots for eyes and
+  // tiny details, and `t` the pastel the shape is printed in by default.
+  var ICONS = {
+    home: { t: 'sage', f: '<path d="M10 21 L24 9 L38 21 V40 H10Z"/>', i: '<path d="M7 22 L24 8 L41 22"/><path d="M11 19 V40 H37 V19"/><path d="M20 40 V31 a4 4 0 0 1 8 0 V40"/>' },
+    log: { t: 'sage', f: '<rect x="10" y="7" width="27" height="34" rx="6"/>', i: '<path d="M30 6 H16 a6 6 0 0 0 -6 6 V35 a6 6 0 0 0 6 6 H31 a6 6 0 0 0 6 -6 V14"/><path d="M17 16 H30 M17 23 H30 M17 30 H24"/>' },
+    plus: { i: '<path d="M24 12 V36 M12 24 H36"/>' },
+    insights: { t: 'sage', f: '<rect x="19" y="11" width="10" height="28" rx="3"/>', i: '<path d="M8 40 H40"/><path d="M14 40 V28 M24 40 V11 M34 40 V21"/>' },
+    child: { t: 'blush', f: '<circle cx="24" cy="17" r="8"/><path d="M10 40 c2 -8 8 -12 14 -12 s12 4 14 12Z"/>', i: '<circle cx="24" cy="16" r="8"/><path d="M9 40 c2 -8 8 -12 15 -12 s13 4 15 12"/>' },
+    search: { t: 'sky', f: '<circle cx="21" cy="21" r="12"/>', i: '<path d="M30 14 A12 12 0 1 0 33 21"/><path d="M30 30 L39 39"/>' },
+    sliders: { t: 'blush', f: '<circle cx="30" cy="15" r="5"/><circle cx="18" cy="33" r="5"/>', i: '<path d="M8 15 H25 M35 15 H40 M8 33 H13 M23 33 H40"/><circle cx="30" cy="15" r="4.5"/><circle cx="18" cy="33" r="4.5"/>' },
+    edit: { t: 'butter', f: '<path d="M12 36 L30 18 L34 22 L16 40Z"/>', i: '<path d="M10 38 L12 30 L30 12 a3 3 0 0 1 4 0 L36 14 a3 3 0 0 1 0 4 L18 36 Z"/><path d="M26 16 L32 22"/>' },
+    trash: { t: 'blush', f: '<rect x="13" y="15" width="22" height="24" rx="4"/>', i: '<path d="M8 13 H40"/><path d="M19 13 V9 H29 V13"/><path d="M12 13 L14 38 a3 3 0 0 0 3 3 H31 a3 3 0 0 0 3 -3 L36 13"/><path d="M21 20 V33 M27 20 V33"/>' },
+    back: { t: 'sky', f: '<circle cx="24" cy="24" r="12"/>', i: '<path d="M28 10 L14 24 L28 38"/>' },
+    close: { t: 'blush', f: '<circle cx="24" cy="24" r="13"/>', i: '<path d="M15 15 L33 33 M33 15 L15 33"/>' },
+    arrow: { i: '<path d="M10 24 H36 M26 13 L37 24 L26 35"/>' },
+    calendar: { t: 'butter', f: '<rect x="10" y="12" width="28" height="28" rx="5"/>', i: '<rect x="10" y="12" width="28" height="28" rx="5"/><path d="M10 20 H38 M17 8 V15 M31 8 V15"/>', d: '<circle cx="18" cy="29" r="2.2"/>' },
+    check: { t: 'sage', f: '<circle cx="24" cy="24" r="14"/>', i: '<path d="M13 25 L20 32 L35 15"/>' },
+    sparkle: { t: 'butter', f: '<path d="M24 7 C25 16 29 20 38 22 C29 24 25 28 24 39 C23 28 19 24 10 22 C19 20 23 16 24 7Z"/>', i: '<path d="M24 7 C25 16 29 20 38 22 C29 24 25 28 24 39 C23 28 19 24 10 22 C19 20 23 16 24 7Z"/><path d="M39 6 V12 M36 9 H42"/>' },
+    heart: { t: 'blush', f: '<path d="M24 39 C11 31 7 23 10 16 C13 10 21 10 24 17 C27 10 35 10 38 16 C41 23 37 31 24 39Z"/>', i: '<path d="M24 39 C11 31 7 23 10 16 C13 10 21 10 24 17 C27 10 35 10 38 16 C41 23 37 31 24 39Z"/>' },
+    word: { t: 'sky', f: '<path d="M12 10 H36 a6 6 0 0 1 6 6 V27 a6 6 0 0 1 -6 6 H23 L15 40 V33 H12 a6 6 0 0 1 -6 -6 V16 a6 6 0 0 1 6 -6Z"/>', i: '<path d="M12 10 H36 a6 6 0 0 1 6 6 V27 a6 6 0 0 1 -6 6 H23 L15 40 V33 H12 a6 6 0 0 1 -6 -6 V16 a6 6 0 0 1 6 -6Z"/><path d="M15 19 H31 M15 25 H24"/>' },
+    sound: { t: 'blush', f: '<circle cx="24" cy="24" r="13"/>', i: '<path d="M8 23 V25 M15 18 V30 M21 11 V37 M27 16 V32 M33 20 V28 M40 23 V25"/>' },
+    sign: { t: 'butter', f: '<ellipse cx="26" cy="31" rx="11" ry="10"/>', i: '<path d="M16 29 V16 a2.5 2.5 0 0 1 5 0 V25 M21 24 V11 a2.5 2.5 0 0 1 5 0 V24 M26 24 V13 a2.5 2.5 0 0 1 5 0 V26 M31 26 V18 a2.5 2.5 0 0 1 5 0 V30 C36 37 31 42 24 42 H23 C19 42 16 40 14 37 L9 30 a2.5 2.5 0 0 1 4 -3 L16 31"/>' },
+    wave: { t: 'butter', f: '<ellipse cx="26" cy="31" rx="11" ry="10"/>', i: '<path d="M16 29 V16 a2.5 2.5 0 0 1 5 0 V25 M21 24 V11 a2.5 2.5 0 0 1 5 0 V24 M26 24 V13 a2.5 2.5 0 0 1 5 0 V26 M31 26 V18 a2.5 2.5 0 0 1 5 0 V30 C36 37 31 42 24 42 H23 C19 42 16 40 14 37 L9 30 a2.5 2.5 0 0 1 4 -3 L16 31"/><path d="M8 12 C6 15 6 18 7 21 M40 8 C42 11 42 14 41 17"/>' },
+    seed: { t: 'butter', f: '<ellipse cx="24" cy="29" rx="9" ry="11"/>', i: '<path d="M24 18 C31 18 34 26 33 32 C32 37 28 40 24 40 S16 37 15 32 C14 26 17 18 24 18Z"/><path d="M23 23 C21 27 21 31 23 35"/><path d="M24 18 C24 14 26 11 29 9"/>' },
+    sprout: { t: 'sage', f: '<path d="M24 28 C14 28 10 22 10 16 C18 16 24 20 24 28Z"/><path d="M24 24 C24 16 29 11 38 11 C38 19 33 24 24 24Z"/>', i: '<path d="M24 28 C14 28 10 22 10 16 C18 16 24 20 24 28Z"/><path d="M24 24 C24 16 29 11 38 11 C38 19 33 24 24 24Z"/><path d="M24 41 V22"/><path d="M14 41 H34"/>' },
+    flower: { t: 'blush', f: '<circle cx="24" cy="17" r="11"/>', i: '<path d="M24 6 c4 0 6 3 5 6 c3 -2 7 0 7 4 c0 3 -3 5 -5 5 c2 2 1 6 -2 7 c-3 1 -5 -1 -5 -3 c0 2 -2 4 -5 3 c-3 -1 -4 -5 -2 -7 c-2 0 -5 -2 -5 -5 c0 -4 4 -6 7 -4 c-1 -3 1 -6 5 -6Z"/><path d="M24 28 V42"/><path d="M24 36 C27 32 31 31 34 32"/>', d: '<circle cx="24" cy="17" r="2.7"/>' },
+    cup: { t: 'sky', f: '<path d="M14 16 H36 L33 40 H17Z"/>', i: '<path d="M11 14 H37 L34 40 a3 3 0 0 1 -3 3 H17 a3 3 0 0 1 -3 -3 Z"/><path d="M14 25 C18 27 21 23 24 25 S30 27 34 25"/><path d="M27 14 L31 5 L36 6"/>' },
+    bottle: { t: 'butter', f: '<rect x="14" y="17" width="20" height="25" rx="4"/>', i: '<path d="M19 6 H29 V11 L33 17 V37 a4 4 0 0 1 -4 4 H19 a4 4 0 0 1 -4 -4 V17 L19 11Z"/><path d="M15 23 H33"/><path d="M19 30 H23 M19 35 H23"/>' },
+    spoon: { t: 'sage', f: '<ellipse cx="24" cy="13" rx="7" ry="9"/>', i: '<path d="M24 22 C20 22 17 18 17 13 S20 4 24 4 S31 8 31 13 S28 22 24 22Z"/><path d="M24 22 V42"/>' },
+    banana: { t: 'butter', f: '<path d="M9 30 C17 40 33 38 39 22 C40 19 39 16 38 14 L36 15 C36 27 26 33 16 30 C13 29 10 29 9 30Z"/>', i: '<path d="M9 30 C17 40 33 38 39 22 C40 19 39 16 38 14 L36 15 C36 27 26 33 16 30 C13 29 10 29 9 30Z"/><path d="M38 14 L40 9"/>' },
+    apple: { t: 'blush', f: '<path d="M24 15 C20 12 10 12 10 24 C10 34 16 41 20 41 C22 41 23 40 24 40 S26 41 28 41 C32 41 38 34 38 24 C38 12 28 12 24 15Z"/>', i: '<path d="M24 15 C20 12 10 12 10 24 C10 34 16 41 20 41 C22 41 23 40 24 40 S26 41 28 41 C32 41 38 34 38 24 C38 12 28 12 24 15Z"/><path d="M24 15 C24 11 25 9 27 7"/><path d="M26 10 C29 7 33 7 34 9 C32 12 28 12 26 10Z"/>' },
+    ball: { t: 'blush', f: '<circle cx="24" cy="24" r="15"/>', i: '<circle cx="24" cy="24" r="15"/><path d="M9.5 21 C16 26 32 26 38.5 21"/><path d="M22 9 C16 16 16 32 22 39"/>' },
+    book: { t: 'butter', f: '<path d="M24 14 C19 10 12 9 6 10 V36 C12 35 19 36 24 40 C29 36 36 35 42 36 V10 C36 9 29 10 24 14Z"/>', i: '<path d="M24 14 C19 10 12 9 6 10 V36 C12 35 19 36 24 40 C29 36 36 35 42 36 V10 C36 9 29 10 24 14Z"/><path d="M24 14 V40"/>' },
+    car: { t: 'sky', f: '<path d="M7 32 V26 L13 24 L18 16 H31 L37 24 L41 26 V32Z"/>', i: '<path d="M11 33 H6 V26 L12 24 L17 15 H31 L37 24 L42 26 V33 H37"/><path d="M19 33 H29"/><circle cx="15" cy="33" r="4"/><circle cx="33" cy="33" r="4"/><path d="M24 15 V24"/>' },
+    shoe: { t: 'blush', f: '<path d="M8 36 V16 H18 C18 22 22 24 28 25 L37 27 C40 28 41 30 41 33 V38 H8Z"/>', i: '<path d="M8 38 V16 H18 C18 22 22 24 28 25 L37 27 C40 28 41 30 41 33 V38 Z"/><path d="M18 21 L22 19 M21 25 L25 23"/><path d="M8 33 H41"/>' },
+    hat: { t: 'sage', f: '<path d="M10 32 C10 20 16 13 24 13 S38 20 38 32Z"/>', i: '<path d="M10 32 C10 20 16 13 24 13 S38 20 38 32"/><rect x="8" y="32" width="32" height="6" rx="3"/><circle cx="24" cy="10" r="3"/>' },
+    music: { t: 'sky', f: '<circle cx="14" cy="35" r="5"/><circle cx="32" cy="31" r="5"/>', i: '<path d="M18 34 V12 L36 8 V30"/><circle cx="14" cy="34" r="4"/><circle cx="32" cy="30" r="4"/><path d="M18 18 L36 14"/>' },
+    bubbles: { t: 'sky', f: '<circle cx="20" cy="28" r="10"/><circle cx="34" cy="14" r="6"/>', i: '<circle cx="20" cy="28" r="10"/><circle cx="34" cy="14" r="6"/><circle cx="37" cy="34" r="3"/><path d="M14 25 A7 7 0 0 1 18 21"/>' },
+    dog: { t: 'butter', f: '<path d="M14 20 C14 12 19 8 24 8 S34 12 34 20 V27 C34 34 30 39 24 39 S14 34 14 27Z"/>', i: '<path d="M14 20 C14 12 19 8 24 8 S34 12 34 20 V27 C34 34 30 39 24 39 S14 34 14 27Z"/><path d="M15 14 C9 13 7 21 9 28 C11 28 13 26 14 23"/><path d="M33 14 C39 13 41 21 39 28 C37 28 35 26 34 23"/><path d="M21 32 C23 34 25 34 27 32"/>', d: '<circle cx="20" cy="21" r="1.8"/><circle cx="28" cy="21" r="1.8"/><ellipse cx="24" cy="27.5" rx="2.5" ry="1.9"/>' },
+    cat: { t: 'blush', f: '<path d="M12 36 V12 L20 19 H28 L36 12 V36 a6 6 0 0 1 -6 6 H18 a6 6 0 0 1 -6 -6Z"/>', i: '<path d="M12 36 V12 L20 19 H28 L36 12 V36 a6 6 0 0 1 -6 6 H18 a6 6 0 0 1 -6 -6Z"/><path d="M5 29 H13 M6 34 L13 33 M43 29 H35 M42 34 L35 33"/>', d: '<circle cx="19" cy="27" r="1.8"/><circle cx="29" cy="27" r="1.8"/><path d="M22.5 31 H25.5 L24 33Z"/>' },
+    duck: { t: 'butter', f: '<path d="M8 29 C8 37 14 41 24 41 S38 37 38 29 C34 31 30 31 26 29 C30 27 32 23 30 17 C28 12 20 11 17 16 C15 19 16 23 19 26 C15 28 11 29 8 29Z"/>', i: '<path d="M8 29 C8 37 14 41 24 41 S38 37 38 29 C34 31 30 31 26 29 C30 27 32 23 30 17 C28 12 20 11 17 16 C15 19 16 23 19 26 C15 28 11 29 8 29Z"/><path d="M30 18 L37 19 L31 22"/><path d="M14 33 C18 36 24 36 28 33"/>', d: '<circle cx="24" cy="18" r="1.8"/>' },
+    fish: { t: 'sky', f: '<ellipse cx="22" cy="24" rx="13" ry="9"/>', i: '<path d="M35 24 C30 15 14 14 9 24 C14 34 30 33 35 24Z"/><path d="M35 24 L42 17 V31Z"/><path d="M22 17 C24 20 24 22 22 24"/>', d: '<circle cx="15" cy="22" r="1.8"/>' },
+    bird: { t: 'blush', f: '<path d="M10 28 C10 19 16 14 24 14 C30 14 34 18 35 22 L35 26 C34 34 28 38 21 38 C14 38 10 34 10 28Z"/>', i: '<path d="M10 28 C10 19 16 14 24 14 C30 14 34 18 35 22 L41 23 L35 26 C34 34 28 38 21 38 C14 38 10 34 10 28Z"/><path d="M16 27 C20 31 25 31 28 27"/><path d="M20 38 V42 M25 38 V42"/>', d: '<circle cx="28" cy="21" r="1.8"/>' },
+    bear: { t: 'butter', f: '<circle cx="24" cy="27" r="13"/><circle cx="13" cy="14" r="5"/><circle cx="35" cy="14" r="5"/>', i: '<path d="M16 17 A13 13 0 1 0 32 17"/><path d="M16 17 A5 5 0 1 0 10 18"/><path d="M32 17 A5 5 0 1 1 38 18"/><path d="M16 17 C21 14 27 14 32 17"/><ellipse cx="24" cy="31" rx="6" ry="4.5"/>', d: '<circle cx="19" cy="24" r="1.8"/><circle cx="29" cy="24" r="1.8"/><ellipse cx="24" cy="29.5" rx="1.8" ry="1.3"/>' },
+    cow: { t: 'butter', f: '<path d="M12 22 C12 13 17 8 24 8 S36 13 36 22 C36 32 31 38 24 38 S12 32 12 22Z"/>', i: '<path d="M12 22 C12 13 17 8 24 8 S36 13 36 22 C36 32 31 38 24 38 S12 32 12 22Z"/><path d="M16 10 C14 6 15 4 17 3 M32 10 C34 6 33 4 31 3"/><path d="M12 17 C7 15 3 18 4 21 C7 22 10 21 12 20 M36 17 C41 15 45 18 44 21 C41 22 38 21 36 20"/><rect class="of-snout" x="15" y="27" width="18" height="10" rx="5"/>', d: '<circle cx="19" cy="20" r="1.9"/><circle cx="29" cy="20" r="1.9"/>' },
+    sun: { t: 'butter', f: '<circle cx="24" cy="24" r="9"/>', i: '<circle cx="24" cy="24" r="8"/><path d="M24 6 V10 M24 38 V42 M6 24 H10 M38 24 H42 M11 11 L14 14 M34 34 L37 37 M37 11 L34 14 M14 34 L11 37"/>' },
+    moon: { t: 'sky', f: '<path d="M30 8 A16 16 0 1 0 40 34 A13 13 0 0 1 30 8Z"/>', i: '<path d="M30 8 A16 16 0 1 0 40 34 A13 13 0 0 1 30 8Z"/><path d="M38 10 V14 M36 12 H40"/>' },
+    tree: { t: 'sage', f: '<circle cx="24" cy="18" r="12"/>', i: '<path d="M14 27 C8 27 8 17 14 16 C14 9 22 7 25 11 C30 7 38 11 36 18 C41 20 40 28 34 27 Z"/><path d="M24 27 V42 M24 34 L29 30"/><path d="M16 42 H32"/>' },
+    bath: { t: 'sky', f: '<path d="M6 24 H42 V28 a10 10 0 0 1 -10 10 H16 a10 10 0 0 1 -10 -10Z"/>', i: '<path d="M6 24 H42 V28 a10 10 0 0 1 -10 10 H16 a10 10 0 0 1 -10 -10Z"/><path d="M14 38 L12 42 M34 38 L36 42"/><path d="M12 24 V12 a4 4 0 0 1 8 0"/><circle cx="29" cy="17" r="3"/><circle cx="36" cy="13" r="2"/>' },
+  };
+  // Class names written whole, so nothing is assembled at runtime.
+  var FILL_CLASS = { sage: 'of-sage', blush: 'of-blush', butter: 'of-butter', sky: 'of-sky', white: 'of-white' };
+  var TINT = { sage: 'tint-sage', blush: 'tint-blush', butter: 'tint-butter', sky: 'tint-sky' };
+  var INK = { sage: 'ink-sage', blush: 'ink-blush', butter: 'ink-butter', sky: 'ink-sky' };
+  var LANG_ON = { sage: 'lang-on-sage', blush: 'lang-on-blush', butter: 'lang-on-butter', sky: 'lang-on-sky' };
+  var SWATCH = { sage: 'sw-sage', blush: 'sw-blush', butter: 'sw-butter', sky: 'sw-sky' };
+
+  // icon('cup', 32) draws the cup at 32px. opts.fill picks the pastel
+  // ('none' leaves the shape out, as on an idle nav tab); opts.label makes
+  // it an image with a name instead of decoration. The ink keeps the same
+  // weight on screen at every size.
+  function icon(name, size, opts) {
+    opts = opts || {};
+    var def = ICONS[name] || ICONS.word;
+    var px = size >= 64 ? 1.3 : 1.6;
+    var sw = Math.round(px * 48 / size * 100) / 100;
+    var fill = opts.fill === undefined ? def.t : opts.fill;
+    var shape = def.f && fill !== 'none' && FILL_CLASS[fill]
+      ? '<g transform="translate(2 2)" class="' + FILL_CLASS[fill] + '">' + def.f + '</g>' : '';
+    var a11y = opts.label ? ' role="img" aria-label="' + esc(opts.label) + '"' : ' aria-hidden="true"';
+    return '<svg class="ico' + (opts.cls ? ' ' + opts.cls : '') + '" width="' + size + '" height="' + size +
+      '" viewBox="0 0 48 48"' + a11y + '>' + shape +
+      '<g class="oi" style="stroke-width:' + sw + '">' + def.i + '</g>' +
+      (def.d ? '<g class="od">' + def.d + '</g>' : '') + '</svg>';
+  }
+
+  // The cow mascot, in the same style: a butter body printed off-register,
+  // soft tan patches and a blush snout. `sw` is its line weight in its own
+  // units; the bubble beside it is optional.
+  function cowShapes(sw) {
+    return '' +
+      '<g transform="translate(3 3)" class="of-butter"><path d="M22 36 C14 42 14 58 20 64 C24 68 30 70 40 70 H72 C82 70 88 64 88 54 C88 40 80 30 66 29 C52 28 32 28 22 36Z"/><path d="M78 26 C78 16 86 11 95 11 C104 11 110 17 110 27 C110 38 104 44 95 44 C86 44 78 37 78 26Z"/></g>' +
+      '<g class="cow-patch"><path d="M38 32 C44 28 54 28 56 34 C58 40 50 44 44 42 C38 41 35 36 38 32Z"/><path d="M20 50 C24 47 30 50 29 56 C28 61 23 62 20 59 C18 56 18 53 20 50Z"/><path d="M58 47 C63 44 70 47 69 53 C68 59 60 60 57 56 C55 53 56 49 58 47Z"/><path d="M98 15 C102 13 107 16 107 21 C107 25 103 27 99 25 C97 22 96 18 98 15Z"/></g>' +
+      '<g class="oi" style="stroke-width:' + sw + '">' +
+        '<path d="M76 30 C62 27 38 27 24 34 C15 40 14 56 20 63 C24 68 31 70 40 70 H74 C83 70 88 64 88 54 C88 48 86 44 83 41"/>' +
+        '<path d="M28 69 V82 a3 3 0 0 0 6 0 V70"/><path d="M44 70 V82 a3 3 0 0 0 6 0 V70"/><path d="M64 70 V82 a3 3 0 0 0 6 0 V70"/><path d="M78 68 V82 a3 3 0 0 0 6 0 V64"/>' +
+        '<path d="M17 44 C10 46 9 54 11 60"/><path d="M11 60 C9 62 10 65 12 64 C13 66 15 64 13 61"/>' +
+        '<path d="M54 70 C54 75 60 75 60 70"/>' +
+        '<path d="M78 26 C78 16 86 11 95 11 C104 11 110 17 110 27 C110 38 104 44 95 44 C86 44 78 37 78 26Z"/>' +
+        '<path d="M86 14 C84 9 85 6 88 5"/><path d="M104 14 C106 9 105 6 102 5"/>' +
+        '<path d="M80 21 C74 18 68 21 68 25 C72 27 77 26 80 23"/><path d="M110 21 C116 18 122 21 122 25 C118 27 113 26 110 23"/>' +
+        '<rect class="of-snout" x="84" y="31" width="22" height="13" rx="6.5"/>' +
+        '<path d="M6 89 H44 M52 89 H94"/>' +
+      '</g>' +
+      '<g class="od"><circle cx="89" cy="24" r="2"/><circle cx="101" cy="24" r="2"/><circle cx="91" cy="37.5" r="1.4"/><circle cx="99" cy="37.5" r="1.4"/></g>';
+  }
+  function heroCowSvg() {
+    return '<svg class="ico hero-cow" viewBox="0 -26 126 122" aria-hidden="true">' +
+      '<g transform="translate(2 2)" class="of-sky"><path d="M54 -22 H78 a6 6 0 0 1 6 6 V-6 a6 6 0 0 1 -6 6 H72 L68 5 V0 H54 a6 6 0 0 1 -6 -6 V-16 a6 6 0 0 1 6 -6Z"/></g>' +
+      '<g class="oi" style="stroke-width:1.6"><path d="M54 -22 H78 a6 6 0 0 1 6 6 V-6 a6 6 0 0 1 -6 6 H72 L68 5 V0 H54 a6 6 0 0 1 -6 -6 V-16 a6 6 0 0 1 6 -6Z"/></g>' +
+      '<g class="od"><circle cx="58" cy="-11" r="1.8"/><circle cx="66" cy="-11" r="1.8"/><circle cx="74" cy="-11" r="1.8"/></g>' +
+      cowShapes(1.6) + '</svg>';
+  }
+  // The welcome scene: the cow among "hi!", "¡hola!" and a signing bubble.
+  function welcomeSceneSvg() {
+    return '<svg class="ico" width="256" height="180" viewBox="0 0 256 180" aria-hidden="true">' +
+      '<g transform="translate(2 2)" class="of-sky"><rect x="14" y="8" width="54" height="28" rx="14"/></g>' +
+      '<g transform="translate(2 2)" class="of-blush"><rect x="184" y="4" width="64" height="28" rx="14"/></g>' +
+      '<g transform="translate(2 2)" class="of-butter"><rect x="196" y="50" width="48" height="30" rx="15"/></g>' +
+      '<g class="oi" style="stroke-width:1.6">' +
+        '<path d="M28 8 H54 a14 14 0 0 1 0 28 H40 L32 42 V35 a14 14 0 0 1 -4 -27Z"/>' +
+        '<path d="M198 4 H234 a14 14 0 0 1 0 28 H212 a14 14 0 0 1 -14 -28Z"/><path d="M204 34 L200 40"/>' +
+        '<rect x="196" y="50" width="48" height="30" rx="15"/>' +
+        '<path d="M213 72 V61 a2 2 0 0 1 4 0 V67 M217 66 V58 a2 2 0 0 1 4 0 V66 M221 66 V60 a2 2 0 0 1 4 0 V68 C225 72 222 74 219 74 H217 C215 74 213 73 212 71 L209 67 a2 2 0 0 1 3 -2 L213 67"/>' +
+      '</g>' +
+      '<g class="od" style="font:700 13px Figtree,sans-serif"><text x="41" y="27" text-anchor="middle">hi!</text><text x="216" y="23" text-anchor="middle">¡hola!</text></g>' +
+      '<g transform="translate(40 40) scale(1.3)">' + cowShapes(1.25) + '</g></svg>';
   }
 
   // ── Dates and ages ────────────────────────────────────────────────────
@@ -89,21 +206,36 @@
     if (!m) return yPart;
     return yPart + ' ' + mPart;
   }
-  var shortFmt, longFmt;
+  var fmtCache = {};
+  function fmt(iso, opts, key) {
+    if (!fmtCache[key]) {
+      // An unusual browser locale string must never stop the page drawing.
+      try { fmtCache[key] = new Intl.DateTimeFormat(navigator.language || 'en', opts); }
+      catch (e) { fmtCache[key] = new Intl.DateTimeFormat('en', opts); }
+    }
+    return fmtCache[key].format(new Date(iso + 'T00:00:00'));
+  }
   function fmtShort(iso) {
-    var d = new Date(iso + 'T00:00:00');
-    var opts = { month: 'short', day: 'numeric' };
-    if (d.getFullYear() !== nowDate().getFullYear()) opts.year = 'numeric';
-    shortFmt = shortFmt || {};
-    var key = opts.year || 'none';
-    shortFmt[key] = shortFmt[key] ||
-      new Intl.DateTimeFormat(navigator.language || 'en', opts);
-    return shortFmt[key].format(d);
+    var sameYear = iso.slice(0, 4) === String(nowDate().getFullYear());
+    if (iso === todayIso()) return 'Today';
+    return sameYear
+      ? fmt(iso, { month: 'short', day: 'numeric' }, 'short')
+      : fmt(iso, { month: 'short', day: 'numeric', year: 'numeric' }, 'shortY');
   }
   function fmtLong(iso) {
-    longFmt = longFmt || new Intl.DateTimeFormat(navigator.language || 'en', { month: 'long', day: 'numeric' });
-    return longFmt.format(new Date(iso + 'T00:00:00'));
+    return fmt(iso, { month: 'long', day: 'numeric' }, 'long');
   }
+  function fmtFull(iso) {
+    return fmt(iso, { month: 'short', day: 'numeric', year: 'numeric' }, 'full');
+  }
+  function addDaysIso(iso, n) {
+    var d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
 
   // The birth month and year, two selects: month and year is all a birthday
   // needs to be here, and a select works on every phone (the creator's ask).
@@ -124,33 +256,40 @@
   // ── Words for things ─────────────────────────────────────────────────
   var KINDS = {
     word: {
-      one: 'Word', many: 'Words', the: 'The word',
-      eg: 'e.g. ball',
+      one: 'Word', many: 'Words', the: 'The word', eg: 'e.g. ball',
       how: function (name) { return 'How ' + name + ' says it'; },
-      verb: 'says', empty: 'No words yet.', add: 'Add a word',
-      unit: ['word', 'words'], icon: 'words',
+      hint: 'e.g. “ba” for ball',
+      tone: 'sky', icon: 'word',
     },
     sound: {
-      one: 'Sound', many: 'Sounds', the: 'The animal or thing',
-      eg: 'e.g. cow or car',
+      one: 'Sound', many: 'Sounds', the: 'The animal or thing', eg: 'e.g. cow or car',
       how: function (name) { return 'The sound ' + name + ' makes'; },
-      verb: 'makes', empty: 'No sounds yet.', add: 'Add a sound',
-      unit: ['sound', 'sounds'], icon: 'animals',
+      hint: 'e.g. moo, vroom',
+      tone: 'blush', icon: 'sound',
     },
     sign: {
-      one: 'Sign', many: 'Signs', the: 'The sign',
-      eg: 'e.g. more',
+      one: 'Sign', many: 'Signs', the: 'What the sign means', eg: 'e.g. more',
       how: function (name) { return 'How ' + name + ' signs it'; },
-      verb: null, empty: 'No signs yet.', add: 'Add a sign',
-      unit: ['sign', 'signs'], icon: 'body',
+      hint: 'e.g. taps fingertips together',
+      tone: 'butter', icon: 'sign',
     },
   };
+
+  var MASTERY = {
+    emerging: { label: 'Emerging', icon: 'seed', hint: 'Tried it once or twice' },
+    practicing: { label: 'Practicing', icon: 'sprout', hint: 'Uses it with a nudge' },
+    mastered: { label: 'Mastered', icon: 'flower', hint: 'Says it on their own' },
+  };
+  var M_PILL = { emerging: 'm-pill m-pill-emerging', practicing: 'm-pill m-pill-practicing', mastered: 'm-pill m-pill-mastered' };
+  function masteryOf(e) { return window.RiloInsights.masteryOf(e); }
+  function masteryIcon(level, size) {
+    return icon(MASTERY[level].icon, size, { label: MASTERY[level].label });
+  }
 
   // The quick start: common entries a parent can tap in one go instead of
   // adding everything by hand (the creator's ask). Each pick is saved as an
   // ordinary first dated today. Sounds are anything that makes a sound,
-  // animals and things alike — a car goes vroom, a horn goes beep beep
-  // (the creator's ask), so the group is "Sounds", not "Animal sounds".
+  // animals and things alike: a car goes vroom, a horn goes beep beep.
   var QUICK_STARTS = [
     { group: 'Words', kind: 'word', items: [
       { label: 'mama' }, { label: 'dada' }, { label: 'ball' }, { label: 'milk' },
@@ -176,9 +315,11 @@
     ] },
   ];
 
+  // Languages offered on the welcome screen. Anything else can be typed.
+  var SETUP_LANGS = ['English', 'Spanish', 'ASL', 'French'];
+
   // Categories are inferred from entry labels, including Spanish.
-  // Phrases checked whole first, then single words. Order inside the lists
-  // does not matter; the first category whose list matches wins.
+  // Phrases checked whole first, then single words.
   var CAT_PHRASES = {
     'all done': 'actions', 'uh-oh': 'actions', 'uh oh': 'actions',
     'night-night': 'home', 'night night': 'home',
@@ -203,63 +344,133 @@
     actions: ['more', 'bye', 'hi', 'hello', 'hola', 'adiós', 'adios', 'no', 'yes',
       'please', 'sorry', 'up', 'down', 'kiss', 'hug', 'done', 'uh', 'oh'],
   };
+  function tokens(label) {
+    return String(label || '').toLowerCase().split(/[^a-záéíóúñü]+/).filter(Boolean);
+  }
   function inferCategory(label) {
     var text = String(label || '').toLowerCase();
     for (var phrase in CAT_PHRASES) {
       if (text.indexOf(phrase) !== -1) return CAT_PHRASES[phrase];
     }
-    var tokens = text.split(/[^a-záéíóúñü]+/).filter(Boolean);
-    for (var i = 0; i < tokens.length; i++) {
+    var tk = tokens(label);
+    for (var i = 0; i < tk.length; i++) {
       for (var cat in CAT_WORDS) {
-        if (CAT_WORDS[cat].indexOf(tokens[i]) !== -1) return cat;
+        if (CAT_WORDS[cat].indexOf(tk[i]) !== -1) return cat;
       }
     }
     return 'words';
   }
 
-  // The sun badge on a block: this first is mastered, said in full.
-  var MAST_BADGE =
-    '<span class="mast"><svg viewBox="0 0 24 24" class="text-on-sun" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5"/></svg></span>';
+  // Which drawing an entry gets: the thing itself when we have it (a cup
+  // for agua, a dog for dog), else its category, else its kind.
+  var LABEL_ICON = {
+    agua: 'cup', water: 'cup', cup: 'cup', vaso: 'cup', juice: 'cup', jugo: 'cup', drink: 'cup',
+    milk: 'bottle', leche: 'bottle', bottle: 'bottle', bibe: 'bottle',
+    ball: 'ball', pelota: 'ball', bola: 'ball',
+    dog: 'dog', perro: 'dog', puppy: 'dog', perrito: 'dog', woof: 'dog',
+    cat: 'cat', gato: 'cat', kitty: 'cat', gatito: 'cat', meow: 'cat', miau: 'cat',
+    duck: 'duck', pato: 'duck', quack: 'duck',
+    banana: 'banana', plátano: 'banana', platano: 'banana',
+    apple: 'apple', manzana: 'apple',
+    book: 'book', libro: 'book',
+    moon: 'moon', luna: 'moon', night: 'moon', noche: 'moon', sleep: 'moon',
+    sun: 'sun', sol: 'sun',
+    car: 'car', coche: 'car', carro: 'car', bus: 'car', truck: 'car', vroom: 'car', beep: 'car',
+    shoe: 'shoe', shoes: 'shoe', zapato: 'shoe', zapatos: 'shoe', socks: 'shoe',
+    cow: 'cow', vaca: 'cow', moo: 'cow',
+    fish: 'fish', pez: 'fish',
+    bird: 'bird', pájaro: 'bird', pajaro: 'bird', owl: 'bird', tweet: 'bird',
+    bear: 'bear', oso: 'bear', teddy: 'bear',
+    tree: 'tree', árbol: 'tree', arbol: 'tree', flower: 'tree', flor: 'tree', leaf: 'tree',
+    bath: 'bath', baño: 'bath',
+    bubbles: 'bubbles', bubble: 'bubbles', burbujas: 'bubbles',
+    hat: 'hat', gorro: 'hat',
+    spoon: 'spoon', cuchara: 'spoon', eat: 'spoon', comer: 'spoon',
+    song: 'music', sing: 'music', music: 'music', música: 'music',
+    bye: 'wave', adiós: 'wave', adios: 'wave', hi: 'wave', hello: 'wave', hola: 'wave', wave: 'wave',
+    mama: 'heart', mamá: 'heart', mom: 'heart', mommy: 'heart', dada: 'heart', dad: 'heart',
+    daddy: 'heart', papa: 'heart', papá: 'heart', abuela: 'heart', abuelo: 'heart',
+    nana: 'heart', grandma: 'heart', grandpa: 'heart', baby: 'heart', hug: 'heart', kiss: 'heart',
+  };
+  var CATEGORY_ICON = {
+    food: 'spoon', play: 'ball', transport: 'car', outside: 'tree', home: 'moon',
+    body: 'shoe', people: 'heart', animals: 'bird',
+  };
+  function entryIconName(e) {
+    var tk = tokens(e.label);
+    for (var i = 0; i < tk.length; i++) if (LABEL_ICON[tk[i]]) return LABEL_ICON[tk[i]];
+    if (e.kind === 'sign') return 'sign';
+    if (e.kind === 'sound') return e.category === 'transport' ? 'car' : 'sound';
+    return CATEGORY_ICON[e.category] || 'word';
+  }
 
-  var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
+  // A language's tint: English sky, Spanish blush, signed languages butter,
+  // every other language sage (the creator's palette).
+  function langTone(name) {
+    var n = String(name || '').trim().toLowerCase();
+    if (!n) return 'sage';
+    if (/^(english|en|inglés|ingles)$/.test(n)) return 'sky';
+    if (/^(spanish|es|español|espanol|castellano)$/.test(n)) return 'blush';
+    if (/^(asl|bsl|lsm|lse|auslan|sign|signs|sign language)$/.test(n) || /sign language|lengua de señas/.test(n)) return 'butter';
+    return 'sage';
+  }
 
   // ── State ────────────────────────────────────────────────────────────
+  function pageFromHash() {
+    var h = location.hash.slice(1);
+    var m = /^entry-(\d+)$/.exec(h);
+    if (m) return { page: 'entry', entryId: Number(m[1]) };
+    if (['insights', 'profile', 'log'].indexOf(h) !== -1) return { page: h, entryId: null };
+    return { page: 'words', entryId: null };
+  }
+  var start = pageFromHash();
   var state = {
     screen: 'loading', // loading | error | app | quickstart
     loadError: null,
     child: null,
     languages: [],
     entries: [],
-    page: ['insights', 'profile', 'log'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'words',
-    search: '', filter: '',
-    tab: null, // null shows the kind cards; 'word' | 'sound' | 'sign' shows that kind's list
+    page: start.page, // words (Home) | log | entry | insights | profile
+    entryId: start.entryId,
+    search: '',
+    filter: 'all', // all | word | sound | sign | emerging | practicing | mastered | month | lang:<name>
     sessionLangs: [], // languages created this session, still unused
     quickPick: {}, // quick-start picks: item id -> true
+    setupLangs: { English: true },
+    setupExtra: [],
   };
 
   function countKind(kind) {
     return state.entries.filter(function (e) { return e.kind === kind; }).length;
   }
-
+  function byNewest(a, b) { return b.said_on.localeCompare(a.said_on) || b.id - a.id; }
   function languagesUsed() {
-    var names = {};
-    var n = 0;
-    state.entries.forEach(function (e) {
-      if (e.language_name && !names[e.language_name]) { names[e.language_name] = true; n += 1; }
+    var seen = {};
+    var list = [];
+    state.entries.slice().sort(byNewest).forEach(function (e) {
+      if (e.language_name && !seen[e.language_name.toLowerCase()]) {
+        seen[e.language_name.toLowerCase()] = true;
+        list.push(e.language_name);
+      }
     });
-    return n;
+    return list;
   }
-
+  function joinNames(list) {
+    if (list.length <= 1) return list.join('');
+    return list.slice(0, -1).join(', ') + ' & ' + list[list.length - 1];
+  }
   function mostUsedLanguageId() {
     var used = state.languages.filter(function (l) { return l.uses > 0; })
       .sort(function (a, b) { return b.uses - a.uses; });
-    return used.length ? used[0].id : null;
+    return used.length ? used[0].id : (state.languages[0] ? state.languages[0].id : null);
   }
-
   function defaultLanguageId(kind) {
     var sameKind = state.entries.filter(function (e) { return e.kind === kind && e.language_id; });
     if (sameKind.length) return sameKind[0].language_id; // entries are newest first
+    if (kind === 'sign') {
+      var signed = state.languages.find(function (l) { return langTone(l.name) === 'butter'; });
+      if (signed) return signed.id;
+    }
     return mostUsedLanguageId();
   }
 
@@ -275,7 +486,7 @@
     var card = document.createElement('div');
     card.style.cssText =
       'position:absolute;left:0;right:0;bottom:0;max-height:100%;overflow-y:auto;' +
-      'background:rgb(var(--surface));border-radius:16px 16px 0 0;padding:8px 16px 24px';
+      'background:rgb(var(--surface));border-radius:24px 24px 0 0;padding:12px 20px 28px';
     card.appendChild(contentEl);
     wrap.append(backdrop, card);
     document.body.appendChild(wrap);
@@ -298,7 +509,7 @@
     var el = document.createElement('div');
     el.textContent = message;
     el.style.cssText =
-      'position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:60;' +
+      'position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:60;' +
       'background:rgb(var(--fg));color:rgb(var(--ground));padding:8px 16px;' +
       'border-radius:999px;font-size:14px;white-space:nowrap';
     document.body.appendChild(el);
@@ -312,13 +523,13 @@
         title: title,
         message: message,
         buttons: [
-          { label: 'Cancel', style: 'cancel' },
+          { label: 'Keep it', style: 'cancel' },
           { label: 'Delete', style: 'destructive' },
         ],
       }).then(function (result) {
         var button = result && result.button;
         if (button && typeof button === 'object') return button.label === 'Delete';
-        var buttons = [{ label: 'Cancel' }, { label: 'Delete' }];
+        var buttons = [{ label: 'Keep it' }, { label: 'Delete' }];
         return buttons[button] && buttons[button].label === 'Delete';
       });
     }
@@ -337,53 +548,62 @@
 
   function loadingHtml() {
     return '' +
-'<main data-screen="loading" class="mx-auto w-full max-w-md px-4 pb-32 pt-4">' +
-'  <div class="skeleton h-9 w-44"></div>' +
-'  <div class="skeleton mt-3 h-5 w-56"></div>' +
-'  <div class="skeleton mt-5 h-16 w-full rounded-xl"></div>' +
-'  <div class="kind-grid mt-4">' +
-'    <div class="skeleton col-span-2 h-32 rounded-2xl"></div>' +
-'    <div class="skeleton h-32 rounded-2xl"></div>' +
-'    <div class="skeleton h-32 rounded-2xl"></div>' +
-'  </div>' +
+'<main data-screen="loading" class="page" aria-busy="true">' +
+'  <div class="skeleton" style="height:44px;width:60%"></div>' +
+'  <div class="skeleton" style="height:196px;border-radius:32px"></div>' +
+'  <div class="kind-grid"><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:120px"></div></div>' +
+'  <div class="skeleton" style="height:240px;border-radius:28px"></div>' +
 '</main>';
   }
 
   function errorHtml() {
-    var who = state.child && state.child.name ? esc(state.child.name) + "'s" : 'the';
+    var who = state.child && state.child.name ? esc(state.child.name) + '’s' : 'the';
     return '' +
-'<main data-screen="error" class="mx-auto w-full max-w-md px-4 py-10">' +
-'  <div class="state-error">' +
-'    <p class="text-body font-medium">Couldn’t load ' + who + ' entries.</p>' +
-'    <p class="text-body text-muted">Nothing you saved is lost. Check your connection and try again.</p>' +
-'    <button type="button" id="retry" class="btn-secondary mt-2">Retry</button>' +
+'<main data-screen="error" class="page page-plain">' +
+'  <div class="state-error">' + icon('cow', 64) +
+'    <p>Couldn’t load ' + who + ' words.</p>' +
+'    <p class="sub">Nothing you saved is lost. Check your connection and try again.</p>' +
+'    <button type="button" id="retry" class="btn-secondary">Retry</button>' +
 '  </div>' +
 '</main>';
   }
 
+  function brandHtml(step) {
+    return '<div class="brand-row"><div class="brand">' + icon('cow', 30) +
+      '<span class="brand-name">rilo</span></div>' +
+      '<div class="steps" aria-label="Step ' + step + ' of 2"><span class="' + (step === 1 ? 'on' : '') + '"></span><span class="' + (step === 2 ? 'on' : '') + '"></span></div></div>';
+  }
+
+  // The welcome: the child's name, birth month and the languages at home.
   function setupHtml() {
     var now = nowDate();
+    var langs = SETUP_LANGS.concat(state.setupExtra);
     return '' +
-'<main data-screen="setup" class="mx-auto w-full max-w-md px-4 py-10">' +
-'  <h1 class="font-rounded text-title">Start tracking</h1>' +
-'  <p class="mt-1 text-body text-muted">Tell Rilo whose words these are. The birth month lets every entry show how old the child was.</p>' +
-'  <form id="setup-form" class="mt-6 flex flex-col gap-4" novalidate>' +
-'    <div>' +
-'      <label class="mb-1 block text-small font-medium" for="setup-name">Name</label>' +
-'      <input id="setup-name" class="field" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Leo">' +
-'    </div>' +
+'<main data-screen="setup" class="page page-plain">' + brandHtml(1) +
+'  <div class="setup-art">' + welcomeSceneSvg() + '</div>' +
+'  <div><h1 class="setup-title">Every little word,<br>in every language.</h1>' +
+'  <p class="sub" style="margin-top:8px">Tell us about your little one. You can change this anytime.</p></div>' +
+'  <form id="setup-form" class="flex flex-col gap-4" novalidate>' +
+'    <div><label class="field-label" for="setup-name">Child’s name</label>' +
+'      <input id="setup-name" class="field" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Luna"></div>' +
 '    <div class="grid grid-cols-2 gap-3">' +
-'      <div>' +
-'        <label class="mb-1 block text-small font-medium" for="setup-month">Birth month</label>' +
-          monthSelectHtml('setup-month', pad(now.getMonth() + 1)) +
-'      </div>' +
-'      <div>' +
-'        <label class="mb-1 block text-small font-medium" for="setup-year">Birth year</label>' +
-          yearSelectHtml('setup-year', now.getFullYear()) +
-'      </div>' +
+'      <div><label class="field-label" for="setup-month">Birth month</label>' + monthSelectHtml('setup-month', pad(now.getMonth() + 1)) + '</div>' +
+'      <div><label class="field-label" for="setup-year">Year</label>' + yearSelectHtml('setup-year', now.getFullYear()) + '</div>' +
 '    </div>' +
-'    <p id="setup-error" hidden class="text-small text-danger"></p>' +
-'    <button type="submit" class="btn-primary">Start tracking</button>' +
+'    <fieldset><legend class="field-label">Languages at home</legend>' +
+'      <div class="chips-row" data-setup-langs>' +
+        langs.map(function (name) {
+          var on = !!state.setupLangs[name];
+          return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-setup-lang="' + esc(name) + '" aria-pressed="' + on + '">' + esc(name) + '</button>';
+        }).join('') +
+'        <button type="button" class="chip chip-dashed" data-setup-other>+ Other</button>' +
+'      </div>' +
+'      <div data-setup-other-area hidden class="mt-3 flex gap-2"><label class="sr-only" for="setup-other">Another language</label>' +
+'        <input id="setup-other" class="field" type="text" maxlength="30" autocomplete="off" placeholder="e.g. Portuguese">' +
+'        <button type="button" class="btn-secondary" data-setup-other-add>Add</button></div>' +
+'    </fieldset>' +
+'    <p id="setup-error" hidden class="form-error"></p>' +
+'    <button type="submit" class="btn-primary" data-setup-go>Start the word list ' + icon('arrow', 20, { fill: 'none' }) + '</button>' +
 '  </form>' +
 '</main>';
   }
@@ -394,104 +614,129 @@
     var name = state.child.name;
     var n = Object.keys(state.quickPick).length;
     return '' +
-'<main data-screen="quickstart" class="mx-auto w-full max-w-md px-4 pb-32 pt-4">' +
-'  <h1 class="font-rounded text-title">What does ' + esc(name) + ' already do?</h1>' +
-'  <p class="mt-1 text-body text-muted">Tap everything ' + esc(name) +
-      ' already says or signs. Rilo saves them dated today, ' + esc(fmtLong(todayIso())) +
-      '. You can edit or delete any of them later.</p>' +
+'<main data-screen="quickstart" class="page">' + brandHtml(2) +
+'  <div><h1 class="setup-title">What does ' + esc(name) + ' already do?</h1>' +
+'  <p class="sub" style="margin-top:8px">Tap everything ' + esc(name) + ' already says or signs. Rilo saves them dated today, ' +
+      esc(fmtLong(todayIso())) + '. You can edit or delete any of them later.</p></div>' +
     QUICK_STARTS.map(function (group) {
-      return '<p class="section-label mt-6">' + esc(group.group) + '</p>' +
-'<div class="flex flex-wrap gap-2">' +
+      var k = KINDS[group.kind];
+      return '<section class="flex flex-col gap-3"><h2 class="section-heading" style="justify-content:flex-start;gap:8px">' +
+        icon(k.icon, 26) + '<span class="font-display" style="font-size:18px;font-weight:600">' + esc(group.group) + '</span></h2>' +
+        '<div class="chips-row">' +
         group.items.map(function (item, i) {
           var id = group.kind + '-' + i;
-          var text = item.sounds_like && group.kind === 'sound'
-            ? item.label + ' · ' + item.sounds_like
-            : item.label;
-          return '<button type="button" class="chip' +
-            (state.quickPick[id] ? ' chip-on' : '') +
-            '" data-quick="' + id + '" aria-pressed="' + !!state.quickPick[id] + '">' +
-            esc(text) + '</button>';
-        }).join('') +
-'</div>';
+          var text = item.sounds_like && group.kind === 'sound' ? item.label + ' · ' + item.sounds_like : item.label;
+          return '<button type="button" class="chip' + (state.quickPick[id] ? ' chip-on' : '') +
+            '" data-quick="' + id + '" aria-pressed="' + !!state.quickPick[id] + '">' + esc(text) + '</button>';
+        }).join('') + '</div></section>';
     }).join('') +
-'  <p data-form-error hidden class="mt-4 text-small text-danger"></p>' +
+'  <p data-form-error hidden class="form-error"></p>' +
 '</main>' +
-'<div class="bar un-safe-bottom"><div class="mx-auto w-full max-w-md px-4 pb-4 pt-3">' +
-'  <div class="flex gap-2">' +
-'    <button type="button" id="quick-add" class="btn-primary flex-1"' + (n ? '' : ' disabled') + '>' +
+'<div class="qs-bar"><div class="qs-bar-inner">' +
+'  <button type="button" id="quick-add" class="btn-primary" style="flex:1"' + (n ? '' : ' disabled') + '>' +
       (n ? (n === 1 ? 'Add 1 entry' : 'Add ' + n + ' entries') : 'Add entries') + '</button>' +
-'    <button type="button" id="quick-skip" class="btn-secondary">Skip</button>' +
-'  </div>' +
+'  <button type="button" id="quick-skip" class="btn-secondary">Skip</button>' +
 '</div></div>';
   }
 
-  // Editorial screens share the existing record forms and API.
-  var ART = {
-    sun: '<path d="M31 18c18-2 31 11 30 28S46 73 30 70 5 56 7 40 15 20 31 18Z"/><path d="M22 35v2m21-2v2m-10 2-2 6 4 1m-15 5c6 9 16 10 24 0"/><g stroke="rgb(var(--sun))" stroke-width="7"><path d="M17 45h1m28 1h1"/></g><path d="M34 10c-5-4 4-6 0-11M49 13c1-7 7-5 7-12M62 24c7 0 7-7 14-7M67 39c6-4 9 1 15-2M65 55c8-3 9 4 16 2M56 66c7 3 4 9 11 12M42 75c6 5 0 9 3 15M26 75c-5 6 2 8-2 15M13 69c-6 2-4 8-10 9M4 56c-7 4-9-2-14 1M0 40c-7-4-9 1-14-3M6 24c-8 0-6-8-13-8M20 13c-7-1-3-8-7-12"/>',
-    bottle: '<path d="M29 17c-1-7 1-14 5-14 5 0 5 6 4 10l5 8M25 26c-8 13-13 33-12 47 1 8 7 10 22 10s22-3 22-10c1-20-3-36-12-48M17 39c12 5 26 5 36 0"/><path d="M24 25c7 3 15 3 23-1" stroke="rgb(var(--sun))" stroke-width="10"/>',
-    duck: '<path d="M43 20c-13-2-23 7-23 19 0 5 2 10 1 13-9 1-21-13-25-5-3 13 9 31 30 33 21 2 38-10 38-24 0-9-12-10-12-20 0-8-4-14-9-16Z"/><path d="m54 38 19 2-15 9" fill="rgb(var(--sign))"/><path d="M42 34v1"/>',
-    hand: '<path d="M29 79 12 60c-5-6-1-12 5-9l9 8-11-31c-3-8 4-11 7-4l8 20-6-32c-1-7 6-9 8-1l5 31 1-34c0-8 7-9 8 0l1 34 6-27c2-7 8-5 7 2l-4 34 7-12c5-7 11-2 7 5L57 70l-2 11"/><path d="M78 18c7 7 10 18 6 27M88 11c10 10 14 24 9 37" stroke="rgb(var(--sign))"/>',
-    sprout: '<path d="M37 79V49c-1-22 7-35 21-42 8 17-1 35-21 42M37 57C17 58 6 45 6 28c20-3 34 7 31 29M22 81c10-5 20-3 30 0"/><path d="M9 67 0 70m64-47 9-7" stroke="rgb(var(--sun))"/>',
-    star: '<path d="m35 5 10 26 28 3-21 19 6 28-24-14-24 14 5-29L-4 34l28-3Z" fill="rgb(var(--sun))"/>',
-    apple: '<path d="M33 29C8 14-7 36 0 57c7 27 22 31 32 23 13 9 28 2 35-24 6-22-13-36-34-27Z" fill="rgb(var(--fruit))"/><path d="M33 29c-1-11-4-16-9-22m9 19c0-15 8-21 20-22-1 13-8 21-20 22"/>',
-    car: '<path d="M1 63V48c0-8 5-12 13-12h6l10-19c4-7 24-7 31 0l11 19h8c10 0 15 5 15 15v12Z" fill="rgb(var(--sign-soft))"/><path d="M44 15v21m-23 0h52"/><circle cx="22" cy="64" r="10" fill="rgb(var(--surface))"/><circle cx="75" cy="64" r="10" fill="rgb(var(--surface))"/>',
-    bubble: '<path d="M10 16C28 0 64 5 72 28c9 25-15 43-40 38L12 79l2-20C-1 48-4 30 10 16Z"/>',
-    book: '<path d="M40 24C25 9 9 10 0 14v57c13-5 28-3 40 9 11-12 26-14 40-9V14c-14-5-27-1-40 10Zm0 0v55"/>',
-    bars: '<path d="M12 75V48m27 27V12m28 63V32"/>',
-    profile: '<circle cx="40" cy="25" r="16"/><path d="M12 76c0-32 56-32 56 0Z"/>',
-  };
-  function art(name, text) {
-    var shape = ART[name] || ART.bubble;
-    return '<svg class="illustration" viewBox="-18 -10 120 110" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + shape + (text ? '<text x="36" y="43" text-anchor="middle" fill="currentColor" stroke="none" font-size="22" font-family="sans-serif">' + esc(text) + '</text>' : '') + '</svg>';
+  function navigate(page, opts) {
+    opts = opts || {};
+    state.page = page;
+    if (page === 'log') {
+      state.filter = opts.filter || 'all';
+      state.search = '';
+    }
+    state.entryId = page === 'entry' ? opts.entryId : null;
+    var hash = page === 'words' ? '' : page === 'entry' ? '#entry-' + opts.entryId : '#' + page;
+    if (location.hash !== hash) history.replaceState(null, '', location.pathname + location.search + hash);
+    render();
+    window.scrollTo({ top: 0 });
+    var title = app.querySelector('h1');
+    if (title) title.focus({ preventScroll: true });
   }
-  function entryArt(e) {
-    if (e.kind === 'sign') return art('hand');
-    if (e.kind === 'sound') return art(e.category === 'transport' ? 'car' : 'duck');
-    return art({ food: 'bottle', transport: 'car', play: 'book', actions: 'hand', outside: 'sprout', animals: 'duck' }[e.category] || 'bubble');
-  }
-  function latest(kind) { return state.entries.filter(function(e) { return e.kind === kind; }).sort(function(a,b) { return b.said_on.localeCompare(a.said_on) || b.id-a.id; })[0]; }
-  function navigate(page, kind, filter) {
-    state.page = page; state.tab = kind || null; state.filter = filter || ''; state.search = '';
-    if (location.hash !== '#' + page) history.replaceState(null, '', location.pathname + location.search + '#' + page);
-    render(); window.scrollTo({ top: 0 });
-    var title = app.querySelector('h1'); if (title) title.focus({ preventScroll: true });
-  }
+
   function navHtml() {
+    var p = state.page;
+    function item(page, name, label, current) {
+      return '<button type="button" class="nav-item" data-page="' + page + '"' + (current ? ' aria-current="page"' : '') + '>' +
+        icon(name, 26, { fill: current ? 'sage' : 'none' }) + '<span>' + esc(label) + '</span></button>';
+    }
     return '<nav class="bottom-nav" aria-label="Main navigation">' +
-      '<button data-page="words"' + (state.page === 'words' || state.page === 'log' ? ' aria-current="page"' : '') + '>' + art('book') + '<span>Words</span></button>' +
-      '<button data-page="insights"' + (state.page === 'insights' ? ' aria-current="page"' : '') + '>' + art('bars') + '<span>Insights</span></button>' +
-      '<button id="add-first" class="nav-add" aria-label="Add a word, sound or sign">' + ICON_PLUS + '</button>' +
-      '<button data-page="profile"' + (state.page === 'profile' ? ' aria-current="page"' : '') + '>' + art('profile') + '<span>Profile</span></button></nav>';
+      item('words', 'home', 'Home', p === 'words') +
+      item('log', 'log', 'Log', p === 'log' || p === 'entry') +
+      '<button type="button" id="add-first" class="nav-add" aria-label="Add a word, sound or sign">' + icon('plus', 26, { fill: 'none' }) + '</button>' +
+      item('insights', 'insights', 'Insights', p === 'insights') +
+      item('profile', 'child', state.child.name, p === 'profile') +
+      '</nav>';
   }
+
   function mainHtml() {
-    var content = state.page === 'insights' ? insightsHtml() : state.page === 'profile' ? profileHtml() : state.page === 'log' ? logHtml() : homeHtml();
-    return '<main data-screen="app" class="editorial-main" data-page="' + state.page + '">' + content + '</main>' + navHtml();
+    var content = state.page === 'insights' ? insightsHtml()
+      : state.page === 'profile' ? profileHtml()
+      : state.page === 'log' ? logHtml()
+      : state.page === 'entry' ? entryHtml()
+      : homeHtml();
+    return '<main data-screen="app" class="page" data-view="' + state.page + '">' + content + '</main>' + navHtml();
   }
-  function headerHtml(title, subtitle, edit) {
-    return '<header class="page-header"><div><h1 tabindex="-1">' + esc(title) + '</h1><p>' + esc(subtitle) + '</p></div>' + (edit ? '<button id="edit-child" class="edit-profile" aria-label="Edit child profile">' + ICON_PENCIL + '</button>' : '') + '</header>';
+
+  function childLine() {
+    var b = state.child.birthday;
+    return formatAge(ageMonths(b, todayIso()), state.child.name) + ' · born ' +
+      MONTH_NAMES[Number(b.slice(5, 7)) - 1] + ' ' + b.slice(0, 4);
   }
+
+  // ── Home ─────────────────────────────────────────────────────────────
   function homeHtml() {
-    var last = latest('word');
-    return headerHtml(state.child.name + '’s words', formatAge(ageMonths(state.child.birthday, todayIso()), state.child.name) + ' today', true) +
-      '<section class="word-hero tone-butter" aria-label="Total spoken words"><div><strong class="hero-count">' + countKind('word') + '</strong><h2>total words</h2><p>' + (last ? 'latest: ' + esc(last.label) + ' · ' + esc(fmtShort(last.said_on)) : 'A little word, a big beginning') + '</p></div><div class="hero-sun">' + art('sun') + '</div></section>' + cardsHtml() +
-      '<section class="recent-section"><div class="section-heading"><h2>Recent words</h2><button data-log="all">See all <span aria-hidden="true">›</span></button></div>' +
-      (state.entries.length ? '<ul class="list recent-list">' + state.entries.slice().sort(function(a,b) { return b.said_on.localeCompare(a.said_on) || b.id-a.id; }).slice(0,5).map(rowHtml).join('') + '</ul>' : '<div class="state-empty"><p>Your word story starts here.</p><button class="btn-primary" data-add-kind="word">Add a word</button></div>') + '</section>';
+    var data = window.RiloInsights.summarize(state.entries, todayIso());
+    var langs = languagesUsed();
+    var name = state.child.name;
+    return '' +
+'<header class="kid-head"><div class="kid-id"><div class="kid-avatar" aria-hidden="true">' + esc(name.charAt(0).toUpperCase()) + '</div>' +
+'  <div style="min-width:0"><h1 class="kid-name" tabindex="-1">' + esc(name) + '</h1><p class="kid-age">' + esc(childLine()) + '</p></div></div>' +
+'  <button type="button" class="round-btn" data-page="profile" aria-label="' + esc(name) + '’s profile and settings">' + icon('sliders', 24) + '</button>' +
+'</header>' +
+'<section class="hero-card" aria-label="Total words, sounds and signs"><div class="hero-blob"></div>' + heroCowSvg() +
+'  <div class="hero-text"><p class="hero-label">' + esc(name) + '’s words so far</p><strong class="hero-count">' + data.total + '</strong></div>' +
+'  <div class="hero-meta">' + (data.thisWeek ? '<span class="pill-sage">+' + data.thisWeek + ' this week</span>' : '') +
+      (langs.length ? '<span>across ' + esc(joinNames(langs)) + '</span>' : '<span>Every first counts</span>') + '</div>' +
+'</section>' +
+'<section class="kind-grid" aria-label="Categories">' +
+      ['word', 'sound', 'sign'].map(function (kind) {
+        var k = KINDS[kind];
+        return '<button type="button" class="kind-card ' + TINT[k.tone] + '" data-kind-card="' + kind + '">' +
+          icon(k.icon, 36, { fill: 'white' }) + '<span><strong class="kind-count">' + countKind(kind) + '</strong>' +
+          '<span class="kind-label ' + INK[k.tone] + '">' + k.many + '</span></span></button>';
+      }).join('') +
+'</section>' +
+'<section class="flex flex-col gap-3"><div class="section-heading"><h2>Recent</h2>' +
+      (state.entries.length ? '<button type="button" class="link-btn" data-page="log">See all</button>' : '') + '</div>' +
+      (state.entries.length
+        ? '<ul class="entry-list">' + state.entries.slice().sort(byNewest).slice(0, 4).map(recentRowHtml).join('') + '</ul>'
+        : '<div class="state-empty">' + icon('word', 56) + '<p>' + esc(name) + '’s word story starts here.</p><p class="sub">Add the first word, sound or sign you have heard.</p><button type="button" class="btn-primary" data-add-kind="word">Add a word</button></div>') +
+'</section>';
   }
-  function cardsHtml() {
-    return '<div class="kind-grid">' + ['word','sound','sign'].map(function(kind) {
-      var last = latest(kind);
-      return '<button class="kind-card tone-' + kind + '" data-kind-card="' + kind + '">' + art({word:'bottle',sound:'duck',sign:'hand'}[kind]) + '<strong>' + countKind(kind) + '</strong><h2>' + KINDS[kind].many + '</h2><p>Latest: ' + (last ? esc(last.label) : 'Not yet') + '</p></button>';
-    }).join('') + '</div>';
+
+  function entryAria(e) {
+    return KINDS[e.kind].one + ': ' + e.label +
+      (e.sounds_like ? ', ' + e.sounds_like : '') +
+      (e.language_name ? ', ' + e.language_name : '') +
+      ', ' + MASTERY[masteryOf(e)].label + ', ' + fmtLong(e.said_on);
   }
-  function selectedEntries() {
-    return state.entries.filter(function(e) {
-      return (!state.tab || e.kind === state.tab) &&
-        (!state.search || (e.label + ' ' + (e.sounds_like || '') + ' ' + (e.language_name || '')).toLowerCase().includes(state.search.toLowerCase())) &&
-        (state.filter !== 'mastered' || (e.kind === 'word' && e.mastered === true)) &&
-        (state.filter !== 'month' || e.said_on.slice(0,7) === todayIso().slice(0,7)) &&
-        (!state.filter.startsWith('language:') || (e.kind === 'word' && (e.language_name || 'Not assigned').toLowerCase() === state.filter.slice(9).toLowerCase()));
-    }).sort(function(a,b) { return b.said_on.localeCompare(a.said_on) || b.id-a.id; });
+
+  function recentRowHtml(e) {
+    var tone = e.language_name ? langTone(e.language_name) : KINDS[e.kind].tone;
+    var level = masteryOf(e);
+    var note = e.sounds_like ? (e.kind === 'sign' ? e.sounds_like : '“' + e.sounds_like + '”') : (e.note || '');
+    return '<li><button type="button" class="entry-row" data-entry="' + e.id + '" aria-label="' + esc(entryAria(e)) + '">' +
+      '<span class="entry-tile ' + TINT[tone] + '">' + icon(entryIconName(e), 32, { fill: 'white' }) + '</span>' +
+      '<span class="entry-main"><span class="entry-top"><span class="entry-word">' + esc(e.label) + '</span>' +
+        '<span class="entry-kicker ' + INK[tone] + '">' + KINDS[e.kind].one + (e.language_name ? ' · ' + esc(e.language_name) : '') + '</span></span>' +
+        (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + '</span>' +
+      '<span class="entry-side"><span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span>' +
+        '<span class="' + M_PILL[level] + '">' + MASTERY[level].label + '</span></span>' +
+      '</button></li>';
   }
+
   function logHtml() {
     return headerHtml(state.tab ? KINDS[state.tab].many : 'Word collection', state.filter ? (state.filter === 'mastered' ? 'Mastered spoken words' : state.filter === 'month' ? 'Entries learned this month' : 'Spoken words · ' + state.filter.slice(9)) : 'Every little way to communicate', false) +
       '<button class="btn-secondary" data-page="words">‹ Back to words</button><label class="sr-only" for="word-search">Search entries</label><input id="word-search" class="field log-search" type="search" placeholder="Search words, sounds or signs" value="' + esc(state.search) + '">' +
