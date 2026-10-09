@@ -476,6 +476,17 @@
   }
 
   // ── Presenting: the kit, with a plain fallback ────────────────────────
+  // The kit's centred modal card is the right surface for tall forms: its
+  // content scrolls inside the card and keyboard avoidance keeps the field
+  // in view, where the bottom sheet sizes to its content and pushes its
+  // top off screen. An older or missing kit falls back to presentSheet.
+  function presentModal(contentEl, onDismiss) {
+    if (window.unNative && window.unNative.presentModal) {
+      return window.unNative.presentModal({ contentEl: contentEl, onDismiss: onDismiss });
+    }
+    return presentSheet(contentEl, onDismiss);
+  }
+
   function presentSheet(contentEl, onDismiss) {
     if (window.unNative && window.unNative.presentSheet) {
       return window.unNative.presentSheet({ contentEl: contentEl, onDismiss: onDismiss });
@@ -1328,7 +1339,10 @@
     var content = document.createElement('form');
     content.novalidate = true;
     content.innerHTML = entrySheetHtml(entry, form);
-    var sheet = presentSheet(content, null);
+    // Tall form: the kit's centred modal scrolls inside the card, unlike the
+    // bottom sheet, which pushed its Cancel header off screen and fought
+    // scrolling with drag-to-dismiss. Short surfaces keep presentSheet.
+    var sheet = presentModal(content, null);
     var errEl = content.querySelector('[data-form-error]');
     var name = state.child.name;
 
