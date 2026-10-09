@@ -84,11 +84,41 @@
     weekAgo.setUTCDate(weekAgo.getUTCDate() - 6);
     var weekStart = weekAgo.toISOString().slice(0, 10);
 
+    // weeks: the last eight Monday weeks, mirroring growth's rules. Only
+    // dated firsts are new; already-learned picks stay in baseline and out
+    // of the running total. A week's total counts every dated first up to
+    // its Sunday, so the weekly numbers line up with the monthly ones.
+    // When the family onboarded with quick-start picks, the series starts
+    // at the earliest entry's week, like growth starts at its month.
+    var mondayOf = function (d) {
+      var m = new Date(d + 'T00:00:00Z');
+      m.setUTCDate(m.getUTCDate() - ((m.getUTCDay() + 6) % 7));
+      return m;
+    };
+    var thisMonday = mondayOf(today);
+    var weeks = [];
+    for (var w = 7; w >= 0; w--) {
+      var wStart = new Date(thisMonday);
+      wStart.setUTCDate(wStart.getUTCDate() - w * 7);
+      var wEnd = new Date(wStart);
+      wEnd.setUTCDate(wEnd.getUTCDate() + 6);
+      var s = wStart.toISOString().slice(0, 10);
+      var e = wEnd.toISOString().slice(0, 10);
+      weeks.push({ start: s, end: e,
+        added: entries.filter(function (x) { return dated(x) && x.said_on >= s && x.said_on <= e; }).length,
+        baseline: entries.filter(function (x) { return !dated(x) && x.said_on >= s && x.said_on <= e; }).length,
+        total: entries.filter(function (x) { return dated(x) && x.said_on <= e; }).length });
+    }
+    if (anyLearned) {
+      var firstMonday = mondayOf(entries.reduce(function (min, x) { return x.said_on < min ? x.said_on : min; }, today)).toISOString().slice(0, 10);
+      while (weeks.length && weeks[0].start < firstMonday) weeks.shift();
+    }
+
     return { counts: counts, languages: Array.from(languages.values()), months: months,
       thisMonth: entries.filter(function (e) { return dated(e) && e.said_on.slice(0, 7) === current; }),
       total: entries.length,
       thisWeek: entries.filter(function (e) { return dated(e) && e.said_on >= weekStart && e.said_on <= today; }).length,
-      growth: growth, byLanguage: languageList, mastery: mastery,
+      growth: growth, weeks: weeks, byLanguage: languageList, mastery: mastery,
       alreadyLearned: entries.filter(function (e) { return !dated(e); }).length };
   }
 
