@@ -32,6 +32,10 @@
     });
     var current = today.slice(0, 7);
     var end = monthIndex(current);
+    // The onboarding batch (quick-start picks) is already learned: it stays
+    // in every total but never counts as growth. Split it off once.
+    var flagged = entries.filter(function (e) { return e.already_learned === true; });
+    var grown = entries.filter(function (e) { return e.already_learned !== true; });
     var first = words.reduce(function (min, e) { return e.said_on.slice(0, 7) < min ? e.said_on.slice(0, 7) : min; }, current);
     // Always show at least six months; long histories remain available.
     var start = Math.min(end - 5, monthIndex(first));
@@ -42,15 +46,26 @@
     }
 
     // Everything the child has: words, sounds and signs together.
-    // growth: each month's new entries and the running total at its end,
-    // from the first entry (at least seven months shown).
-    var firstAll = entries.reduce(function (min, e) { return e.said_on.slice(0, 7) < min ? e.said_on.slice(0, 7) : min; }, current);
-    var gStart = Math.min(end - 6, monthIndex(firstAll));
+    // growth: each month's new entries and the running total at its end.
+    // With an onboarding batch, growth starts in the month the family began
+    // using Rilo (the earliest flagged entry), that first month left empty,
+    // and only firsts added after it are charted; a grown entry dated before
+    // it (an edit can back-date) still stretches the chart back to itself.
+    // Without one, the old rule stands: from the first entry, at least
+    // seven months shown.
+    var firstAll = grown.reduce(function (min, e) { return e.said_on.slice(0, 7) < min ? e.said_on.slice(0, 7) : min; }, current);
+    var gStart;
+    if (flagged.length) {
+      var baseline = flagged.reduce(function (min, e) { return e.said_on.slice(0, 7) < min ? e.said_on.slice(0, 7) : min; }, current);
+      gStart = Math.min(monthIndex(baseline), monthIndex(firstAll));
+    } else {
+      gStart = Math.min(end - 6, monthIndex(firstAll));
+    }
     var running = 0;
     var growth = [];
     for (var g = gStart; g <= end; g++) {
       var gKey = monthKey(g);
-      var added = entries.filter(function (e) { return e.said_on.slice(0, 7) === gKey; }).length;
+      var added = grown.filter(function (e) { return e.said_on.slice(0, 7) === gKey; }).length;
       running += added;
       growth.push({ key: gKey, added: added, total: running });
     }
@@ -77,7 +92,7 @@
     return { counts: counts, languages: Array.from(languages.values()), months: months,
       thisMonth: entries.filter(function (e) { return e.said_on.slice(0, 7) === current; }),
       total: entries.length,
-      thisWeek: entries.filter(function (e) { return e.said_on >= weekStart && e.said_on <= today; }).length,
+      thisWeek: grown.filter(function (e) { return e.said_on >= weekStart && e.said_on <= today; }).length,
       growth: growth, byLanguage: languageList, mastery: mastery };
   }
 

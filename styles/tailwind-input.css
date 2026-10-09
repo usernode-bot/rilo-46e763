@@ -180,6 +180,11 @@ textarea.field { padding: 12px 16px; min-height: 88px; line-height: 1.45; }
 .chip.lang-on-butter { background: rgb(var(--t-butter)); color: rgb(var(--k-butter)); border: 1.5px solid rgb(var(--k-butter)); }
 .chip.lang-on-sage { background: rgb(var(--t-sage)); color: rgb(var(--k-sage)); border: 1.5px solid rgb(var(--k-sage)); }
 
+/* A picked quick-start chip and its stage chip are one inline pair, so two
+ * buttons never nest; the stage chip carries the sage tint. */
+.qs-pick { display: inline-flex; align-items: center; gap: 6px; }
+.chip.qs-stage { background: rgb(var(--t-sage)); color: rgb(var(--k-sage)); border-color: rgb(var(--t-sage)); font-size: 13px; padding: 0 12px; }
+
 /* The four tints, as backgrounds and as text inks. */
 .tint-sage { background: rgb(var(--t-sage)); }   .ink-sage { color: rgb(var(--k-sage)); }
 .tint-blush { background: rgb(var(--t-blush)); } .ink-blush { color: rgb(var(--k-blush)); }

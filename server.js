@@ -211,6 +211,7 @@ const wrap = (fn) => (req, res, next) =>
 const ENTRY_SELECT = `
   SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id,
          e.category, e.mastered, e.mastery, e.mastery_history,
+         e.already_learned,
          e.said_on::text AS said_on, e.note, e.is_demo,
          l.name AS language_name
   FROM entries e LEFT JOIN languages l ON l.id = e.language_id
@@ -264,6 +265,7 @@ app.get('/api/state', wrap(async (req, res) => {
   const entries = await pool.query(
     `SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id,
             e.category, e.mastered, e.mastery, e.mastery_history,
+            e.already_learned,
             e.said_on::text AS said_on, e.note, e.is_demo,
             l.name AS language_name
      FROM entries e LEFT JOIN languages l ON l.id = e.language_id
@@ -416,9 +418,12 @@ app.post('/api/entries', wrap(async (req, res) => {
 }));
 
 // The quick start onboarding: everything the child already does, tapped in
-// one go on the day the family started using Rilo. Each pick is saved as an
-// ordinary first dated today (server's today, the same slack as elsewhere),
-// with no language and no note — the parent can edit any of them later.
+// one go on the day the family started using Rilo. These are kept as already
+// learned: the onboarding day stays in `said_on` for sorting and the edit
+// sheet, but `already_learned` marks them so screens say "Already learned"
+// instead of a date and the growth counts leave them out. Each pick carries
+// its own mastery stage (default emerging). No language and no note — the
+// parent can edit any of them later.
 app.post('/api/quick-start', wrap(async (req, res) => {
   const ownerId = String(req.user.id);
   const items = Array.isArray(req.body.items) ? req.body.items : null;
@@ -446,7 +451,8 @@ app.post('/api/quick-start', wrap(async (req, res) => {
     if (label.length < 1 || label.length > 60) return null;
     const sounds_like = typeof item.sounds_like === 'string' ? item.sounds_like.trim() : '';
     if (sounds_like.length > 80) return null;
-    return [kind, label, sounds_like || null, validCategory(item.category)];
+    const mastery = MASTERY.has(item.mastery) ? item.mastery : 'emerging';
+    return [kind, label, sounds_like || null, validCategory(item.category), mastery];
   });
   if (values.some(function (v) { return v === null; })) {
     return res.status(400).json({ error: 'One of the picks is missing its word, animal or sign.' });
@@ -456,13 +462,13 @@ app.post('/api/quick-start', wrap(async (req, res) => {
     await client.query('BEGIN');
     const rows = [];
     for (const v of values) {
+      const history = JSON.stringify([{ level: v[4], on: saidOn }]);
       const inserted = await client.query(
         `INSERT INTO entries (owner_id, kind, label, sounds_like, said_on, category,
-                              mastered, mastery, mastery_history)
-         VALUES ($1, $2, $3, $4, $5, $6, false, 'practicing', $7::jsonb)
+                              mastered, mastery, mastery_history, already_learned)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, true)
          RETURNING id`,
-        [ownerId, v[0], v[1], v[2], saidOn, v[3],
-         JSON.stringify([{ level: 'practicing', on: saidOn }])]);
+        [ownerId, v[0], v[1], v[2], saidOn, v[3], v[4] === 'mastered', v[4], history]);
       // Same client as the INSERT: the rows are not committed yet, so a
       // pool query would not see them.
       const row = await client.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
@@ -585,6 +591,12 @@ async function ensureSchema() {
       SET mastery_history = jsonb_build_array(
         jsonb_build_object('level', mastery, 'on', said_on::text))
       WHERE mastery_history = '[]'::jsonb;
+  `);
+  // Marks the onboarding batch (the quick-start picks): kept as already
+  // learned, so screens show no date and growth counts leave them out.
+  // Set only by POST /api/quick-start, never cleared.
+  await pool.query(`
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS already_learned boolean NOT NULL DEFAULT false;
   `);
   // All four tables hold personal family data: private, and staged without
   // their rows (see "Public vs private tables" in the platform conventions).

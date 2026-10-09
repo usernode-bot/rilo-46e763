@@ -31,6 +31,22 @@ test('growth is a running total of every entry, with mastery stages and all lang
   assert.deepEqual(data.byLanguage.map(l => [l.name, l.count]),
     [['ASL', 1], ['English', 1], ['Spanish', 1], ['No language', 1]]);
 });
+test('onboarding picks are already learned: growth starts at their month, empty', () => {
+  const data = summarize([
+    { kind: 'word', said_on: '2026-10-09', language_name: 'English', already_learned: true, mastery: 'emerging' },
+    { kind: 'sound', said_on: '2026-10-09', language_name: 'English', already_learned: true, mastery: 'practicing' },
+    { kind: 'word', said_on: '2026-11-05', language_name: 'English', mastery: 'emerging' },
+    { kind: 'word', said_on: '2026-11-20', language_name: 'Spanish', mastery: 'emerging' },
+  ], '2026-12-03');
+  // The onboarding month shows 0 new and 0 total; only later firsts grow.
+  assert.deepEqual(data.growth.map(m => [m.key, m.added, m.total]),
+    [['2026-10', 0, 0], ['2026-11', 2, 2], ['2026-12', 0, 2]]);
+  assert.equal(data.growth.length, 3);
+  assert.equal(data.thisWeek, 0);
+  // The batch still counts in the total and the mastery tiles.
+  assert.equal(data.total, 4);
+  assert.deepEqual(data.mastery, { emerging: 3, practicing: 1, mastered: 0 });
+});
 test('empty records produce honest zero metrics and a six month chart', () => {
   const data = summarize([], '2026-01-01');
   assert.equal(data.months.length, 6);

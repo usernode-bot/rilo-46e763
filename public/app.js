@@ -435,7 +435,7 @@
     search: '',
     filter: 'all', // all | word | sound | sign | emerging | practicing | mastered | month | lang:<name>
     sessionLangs: [], // languages created this session, still unused
-    quickPick: {}, // quick-start picks: item id -> true
+    quickPick: {}, // quick-start picks: item id -> mastery stage ('emerging' to start)
     setupLangs: { English: true },
     setupExtra: [],
   };
@@ -608,16 +608,16 @@
 '</main>';
   }
 
-  // The quick start, straight after setup: tap what the child already does,
-  // save them all dated today, or skip and add entries one at a time.
+  // The quick start, straight after setup: tap what the child already does
+  // and how well they do each one. The picks are kept as already learned,
+  // with no date, and each one can also be added one at a time later.
   function quickstartHtml() {
     var name = state.child.name;
     var n = Object.keys(state.quickPick).length;
     return '' +
 '<main data-screen="quickstart" class="page">' + brandHtml(2) +
 '  <div><h1 class="setup-title">What does ' + esc(name) + ' already do?</h1>' +
-'  <p class="sub" style="margin-top:8px">Tap everything ' + esc(name) + ' already says or signs. Rilo saves them dated today, ' +
-      esc(fmtLong(todayIso())) + '. You can edit or delete any of them later.</p></div>' +
+'  <p class="sub" style="margin-top:8px">Tap everything ' + esc(name) + ' already says or signs, and tap again to set how well they do it. Rilo keeps them as already learned, with no date. You can edit or delete any of them later.</p></div>' +
     QUICK_STARTS.map(function (group) {
       var k = KINDS[group.kind];
       return '<section class="flex flex-col gap-3"><h2 class="section-heading" style="justify-content:flex-start;gap:8px">' +
@@ -626,8 +626,16 @@
         group.items.map(function (item, i) {
           var id = group.kind + '-' + i;
           var text = item.sounds_like && group.kind === 'sound' ? item.label + ' · ' + item.sounds_like : item.label;
-          return '<button type="button" class="chip' + (state.quickPick[id] ? ' chip-on' : '') +
-            '" data-quick="' + id + '" aria-pressed="' + !!state.quickPick[id] + '">' + esc(text) + '</button>';
+          var pick = state.quickPick[id];
+          var chip = '<button type="button" class="chip' + (pick ? ' chip-on' : '') +
+            '" data-quick="' + id + '" aria-pressed="' + !!pick + '">' + esc(text) + '</button>';
+          if (!pick) return chip;
+          // Two buttons must not nest: the stage chip is a sibling inside
+          // one inline pair, and tapping it steps through the stages.
+          var m = MASTERY[pick];
+          return '<span class="qs-pick">' + chip +
+            '<button type="button" class="chip qs-stage" data-quick-stage="' + id + '" aria-label="' + esc(text) + ': ' + esc(m.label) + ', tap for the next stage">' +
+            icon(m.icon, 20) + m.label + '</button></span>';
         }).join('') + '</div></section>';
     }).join('') +
 '  <p data-form-error hidden class="form-error"></p>' +
@@ -716,11 +724,18 @@
 '</section>';
   }
 
+  // Where a date would sit, an onboarding pick (already learned) says so
+  // instead: its real date stays stored for sorting and the edit sheet.
+  function dateLabel(e) {
+    return e.already_learned ? 'Already learned' : fmtShort(e.said_on);
+  }
+
   function entryAria(e) {
     return KINDS[e.kind].one + ': ' + e.label +
       (e.sounds_like ? ', ' + e.sounds_like : '') +
       (e.language_name ? ', ' + e.language_name : '') +
-      ', ' + MASTERY[masteryOf(e)].label + ', ' + fmtLong(e.said_on);
+      ', ' + MASTERY[masteryOf(e)].label + ', ' +
+      (e.already_learned ? 'already learned' : fmtLong(e.said_on));
   }
 
   function recentRowHtml(e) {
@@ -732,7 +747,7 @@
       '<span class="entry-main"><span class="entry-top"><span class="entry-word">' + esc(e.label) + '</span>' +
         '<span class="entry-kicker ' + INK[tone] + '">' + KINDS[e.kind].one + (e.language_name ? ' · ' + esc(e.language_name) : '') + '</span></span>' +
         (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + '</span>' +
-      '<span class="entry-side"><span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span>' +
+      '<span class="entry-side"><span class="entry-date">' + esc(dateLabel(e)) + '</span>' +
         '<span class="' + M_PILL[level] + '">' + MASTERY[level].label + '</span></span>' +
       '</button></li>';
   }
@@ -798,19 +813,29 @@
     if (!rows.length) {
       return '<div class="state-empty">' + icon('search', 48) + '<p>Nothing matches yet.</p><p class="sub">Try another search or filter, or add something new.</p><button type="button" class="btn-secondary" data-add-kind="' + (KINDS[state.filter] ? state.filter : 'word') + '">Add an entry</button></div>';
     }
+    // Dated firsts group by age; the onboarding picks (already learned) sit
+    // in their own group at the bottom, newest first by their kept date.
+    var dated = rows.filter(function (e) { return !e.already_learned; });
+    var learned = rows.filter(function (e) { return e.already_learned; });
     var groups = new Map();
-    rows.forEach(function (e) {
+    dated.forEach(function (e) {
       var age = ageMonths(state.child.birthday, e.said_on);
       if (!groups.has(age)) groups.set(age, []);
       groups.get(age).push(e);
     });
-    return Array.from(groups.keys()).sort(function (a, b) { return b - a; }).map(function (age) {
+    var html = Array.from(groups.keys()).sort(function (a, b) { return b - a; }).map(function (age) {
       var group = groups.get(age);
       var first = group[0].said_on;
       return '<section class="age-group"><div class="age-heading"><h2>' + esc(formatAge(age, state.child.name)) + '</h2>' +
         '<span>' + esc(MONTH_NAMES[Number(first.slice(5, 7)) - 1] + ' ' + first.slice(0, 4)) + ' · ' + group.length + (group.length === 1 ? ' entry' : ' entries') + '</span></div>' +
         '<ul class="entry-list">' + group.map(logRowHtml).join('') + '</ul></section>';
     }).join('');
+    if (learned.length) {
+      html += '<section class="age-group" data-learned-group><div class="age-heading"><h2>Already learned</h2>' +
+        '<span>' + learned.length + (learned.length === 1 ? ' entry' : ' entries') + '</span></div>' +
+        '<ul class="entry-list">' + learned.map(logRowHtml).join('') + '</ul></section>';
+    }
+    return html;
   }
   function logRowHtml(e) {
     var tone = e.language_name ? langTone(e.language_name) : KINDS[e.kind].tone;
@@ -821,7 +846,7 @@
         '<span class="lang-chip ' + TINT[tone] + ' ' + INK[tone] + '">' + esc(e.language_name || KINDS[e.kind].one) + '</span>' +
         (e.is_demo ? '<span class="lang-chip tint-sage ink-sage">Staging demo</span>' : '') + '</span>' +
         (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + '</span>' +
-      '<span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span></button></li>';
+      '<span class="entry-date">' + esc(dateLabel(e)) + '</span></button></li>';
   }
 
   // ── Entry detail ─────────────────────────────────────────────────────
@@ -836,7 +861,7 @@
     var level = masteryOf(e);
     var says = e.sounds_like
       ? (e.kind === 'sign' ? esc(name) + ' signs it: ' + esc(e.sounds_like) : esc(name) + ' says <i>“' + esc(e.sounds_like) + '”</i>')
-      : 'Noticed ' + esc(fmtLong(e.said_on));
+      : (e.already_learned ? 'Already learned' : 'Noticed ' + esc(fmtLong(e.said_on)));
     var history = Array.isArray(e.mastery_history) && e.mastery_history.length
       ? e.mastery_history.slice() : [{ level: level, on: e.said_on }];
     var age = formatAge(ageMonths(state.child.birthday, e.said_on), name);
@@ -849,7 +874,8 @@
 '  <p class="detail-says ' + INK[tone] + '">' + says + '</p>' +
 '</section>' +
 '<dl class="info-card">' +
-'  <div class="info-row"><dt>First noticed</dt><dd>' + esc(fmtFull(e.said_on)) + ' · ' + esc(age) + '</dd></div>' +
+'  <div class="info-row"><dt>First noticed</dt><dd>' +
+      (e.already_learned ? 'Already learned' : esc(fmtFull(e.said_on)) + ' · ' + esc(age)) + '</dd></div>' +
 '  <div class="info-row"><dt>Mastery</dt><dd>' + icon(MASTERY[level].icon, 26) + MASTERY[level].label + '</dd></div>' +
       (e.note ? '<div class="info-block"><dt>Notes</dt><dd>' + esc(e.note) + '</dd></div>' : '') +
       (e.is_demo ? '<div class="info-row"><dt>Source</dt><dd>Staging demo</dd></div>' : '') +
@@ -903,6 +929,9 @@
       data.growth.slice().reverse().map(function (m) {
         return '<tr><td>' + MONTH_NAMES[Number(m.key.slice(5)) - 1] + ' ' + m.key.slice(0, 4) + '</td><td>' + m.added + '</td><td>' + m.total + '</td></tr>';
       }).join('') + '</tbody></table></details>' +
+      (state.entries.some(function (e) { return e.already_learned; })
+        ? '<p class="note-box">Growth counts the firsts added after you started Rilo. What you saved on your first day is already in the total.</p>'
+        : '') +
 '</section>' +
 '<section class="lang-card" aria-labelledby="lang-h"><h2 id="lang-h" class="card-label">By language</h2>' +
       (data.byLanguage.length
@@ -1022,18 +1051,28 @@
       state.screen = 'app';
       render();
     });
+    var refocusQuick = function (sel) {
+      var again = app.querySelector(sel);
+      if (again) again.focus({ preventScroll: true });
+    };
     app.querySelectorAll('[data-quick]').forEach(function (chip) {
       chip.addEventListener('click', function () {
         var id = chip.getAttribute('data-quick');
+        // A pick starts at Emerging; unpicking removes it. The whole screen
+        // re-renders so the stage chip beside the pick appears or goes.
         if (state.quickPick[id]) delete state.quickPick[id];
-        else state.quickPick[id] = true;
-        var on = !!state.quickPick[id];
-        chip.classList.toggle('chip-on', on);
-        chip.setAttribute('aria-pressed', String(on));
-        var n = Object.keys(state.quickPick).length;
-        var add = app.querySelector('#quick-add');
-        add.disabled = !n;
-        add.textContent = n ? (n === 1 ? 'Add 1 entry' : 'Add ' + n + ' entries') : 'Add entries';
+        else state.quickPick[id] = 'emerging';
+        render();
+        refocusQuick('[data-quick="' + CSS.escape(id) + '"]');
+      });
+    });
+    app.querySelectorAll('[data-quick-stage]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var id = chip.getAttribute('data-quick-stage');
+        var order = ['emerging', 'practicing', 'mastered'];
+        state.quickPick[id] = order[(order.indexOf(state.quickPick[id]) + 1) % order.length];
+        render();
+        refocusQuick('[data-quick-stage="' + CSS.escape(id) + '"]');
       });
     });
 
@@ -1164,6 +1203,7 @@
             label: item.label,
             sounds_like: item.sounds_like || '',
             category: inferCategory(item.label),
+            mastery: state.quickPick[group.kind + '-' + i],
           });
         }
       });

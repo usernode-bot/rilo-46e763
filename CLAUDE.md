@@ -149,7 +149,8 @@ The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights
 - **Mastery has three stages** (the creator's redesign): `mastery` is
   `emerging` (tried it once or twice), `practicing` (uses it with a nudge)
   or `mastered` (says it on their own); new entries start emerging, quick
-  starts practicing. `mastery_history` (jsonb) lists each stage and the day
+  starts at the stage the parent picks during onboarding (emerging unless
+  they tap otherwise). `mastery_history` (jsonb) lists each stage and the day
   it was reached: a PATCH that changes the stage appends one step dated the
   request's today. The old `mastered` boolean is kept in step and still
   accepted from a request that sends only it. Rows from before the stages
@@ -160,8 +161,12 @@ The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights
 - **Sounds are animals AND things** (the creator's ask: car vroom,
   ambulance wee-o, horn beep beep) — the kind is labelled "Sound", the
   quick-start group is "Sounds", and its prompt asks for "the animal or
-  thing". Quick starts are saved as ordinary firsts dated the day the
-  family started using Rilo, with the category inferred.
+  thing". Quick starts are saved as **already learned** firsts
+  (`already_learned`, set only by `POST /api/quick-start`, never cleared):
+  the onboarding day stays in `said_on` for sorting, but screens show
+  "Already learned" instead of a date, they group at the bottom of the Log,
+  and Insights growth starts at the onboarding month, left empty, counting
+  only firsts added after it. Totals, language and mastery counts keep them.
 - Dates are Postgres `date` columns and travel as `YYYY-MM-DD` strings
   everywhere (cast to text in SELECTs so node-pg never shifts the day); a
   date is what the parent entered in their own calendar, and the server
