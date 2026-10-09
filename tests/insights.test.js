@@ -73,3 +73,44 @@ test('a backdated first starts the chart earlier than onboarding', () => {
   assert.deepEqual(data.growth.map(m => [m.key, m.added, m.baseline, m.total]),
     [['2026-08', 1, 0, 1], ['2026-09', 0, 0, 1], ['2026-10', 0, 1, 1]]);
 });
+test('weekly buckets start on Mondays and carry history', () => {
+  const data = summarize([
+    { kind: 'word', said_on: '2026-06-15', language_name: 'English', mastery: 'emerging' },
+    { kind: 'word', said_on: '2026-10-01', language_name: 'English', mastery: 'emerging' },
+    { kind: 'word', said_on: '2026-10-08', language_name: 'Spanish', mastery: 'emerging' },
+  ], '2026-10-09'); // a Friday, so the current week starts Monday 2026-10-05
+  assert.equal(data.weeks.length, 8);
+  assert.deepEqual(data.weeks.map(w => w.key),
+    ['2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05']);
+  assert.ok(data.weeks.every(w => new Date(w.key + 'T00:00:00Z').getUTCDay() === 1));
+  // History older than the window is folded into the first bar's total.
+  assert.deepEqual(data.weeks[0].total, 1);
+  assert.deepEqual(data.weeks[7].total, 3);
+});
+test('already-learned picks are a weekly baseline, never new', () => {
+  const data = summarize([
+    { kind: 'word', said_on: '2026-09-28', already_learned: true, mastery: 'emerging' },
+    { kind: 'sound', said_on: '2026-09-28', already_learned: true, mastery: 'practicing' },
+    { kind: 'word', said_on: '2026-10-08', language_name: 'English', mastery: 'emerging' },
+  ], '2026-10-09');
+  const batch = data.weeks.find(w => w.key === '2026-09-28');
+  assert.deepEqual([batch.added, batch.baseline], [0, 2]);
+  assert.deepEqual([data.weeks[data.weeks.length - 1].added, data.weeks[data.weeks.length - 1].total], [1, 1]);
+});
+test('the weekly series starts at the onboarding week', () => {
+  const data = summarize([
+    { kind: 'word', said_on: '2026-09-25', already_learned: true, mastery: 'emerging' },
+    { kind: 'sound', said_on: '2026-09-25', already_learned: true, mastery: 'practicing' },
+  ], '2026-10-09');
+  // Weeks before the family started are not shown: three buckets, not eight.
+  assert.deepEqual(data.weeks.map(w => w.key), ['2026-09-21', '2026-09-28', '2026-10-05']);
+  assert.deepEqual([data.weeks[0].added, data.weeks[0].baseline, data.weeks[0].total], [0, 2, 0]);
+});
+test('sounds and signs count in weekly buckets', () => {
+  const data = summarize([
+    { kind: 'sound', said_on: '2026-10-07', mastery: 'emerging' },
+    { kind: 'sign', said_on: '2026-10-07', mastery: 'practicing' },
+    { kind: 'word', said_on: '2026-10-08', language_name: 'English', mastery: 'emerging' },
+  ], '2026-10-09');
+  assert.deepEqual([data.weeks[data.weeks.length - 1].added, data.weeks[data.weeks.length - 1].total], [3, 3]);
+});

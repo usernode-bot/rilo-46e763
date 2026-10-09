@@ -435,6 +435,7 @@
     entryId: start.entryId,
     search: '',
     filter: 'all', // all | word | sound | sign | emerging | practicing | mastered | month | lang:<name>
+    growthView: 'month', // insights growth card: month | week
     sessionLangs: [], // languages created this session, still unused
     quickPick: {}, // quick-start picks: item id -> mastery stage ('emerging'|'practicing'|'mastered')
     setupLangs: { English: true },
@@ -914,25 +915,61 @@
     // The month the family started using Rilo, if they onboarded with
     // quick-start picks: a note under the chart explains the empty start.
     var baselineMonth = data.growth.find(function (m) { return m.baseline > 0; });
+    var baselineWeek = data.weeks.find(function (m) { return m.baseline > 0; });
+    function weekLabel(key) { return String(Number(key.slice(8, 10))) + ' ' + MONTH_NAMES[Number(key.slice(5, 7)) - 1].slice(0, 3); }
+    function weekFull(key) { return String(Number(key.slice(8, 10))) + ' ' + MONTH_NAMES[Number(key.slice(5, 7)) - 1]; }
+    // Week view swaps the headline, the bars, their labels, the note and the
+    // details table on this same card; Month is what it opens on.
+    var week = state.growthView === 'week';
+    var bars = week ? data.weeks : shown;
+    var max = week
+      ? Math.max(1, Math.max.apply(null, data.weeks.map(function (m) { return m.total; })))
+      : Math.max(1, data.total);
+    var headline = week
+      ? '<span class="growth-big">+' + bars[bars.length - 1].added + '</span><span class="sub" style="font-size:14px">new this week</span>'
+      : '<span class="growth-big">+' + current.added + '</span><span class="sub" style="font-size:14px">new in ' + monthName + '</span>';
+    var chartDesc = week
+      ? 'Words, sounds and signs in total by week: ' + bars.map(function (m) { return weekLabel(m.key) + ' ' + m.total; }).join(', ')
+      : 'Words, sounds and signs in total by month: ' + shown.map(function (m) {
+          return MONTH_NAMES[Number(m.key.slice(5)) - 1] + ' ' + m.total;
+        }).join(', ');
+    var barLabel = week
+      ? bars.map(function (m) { return '<span>' + weekLabel(m.key) + '</span>'; }).join('')
+      : shown.map(function (m) { return '<span>' + MONTH_NAMES[Number(m.key.slice(5)) - 1].slice(0, 3) + '</span>'; }).join('');
+    var finePrint = week
+      ? (baselineWeek ? '<p class="fine-print">Started with ' + baselineWeek.baseline + ' already learned in the week of ' +
+          weekFull(baselineWeek.key) + '.</p>' : '')
+      : (baselineMonth ? '<p class="fine-print">Started with ' + baselineMonth.baseline + ' already learned in ' +
+          MONTH_NAMES[Number(baselineMonth.key.slice(5)) - 1] + '.</p>' : '');
+    var chartTable = week
+      ? '<details class="chart-table" open><summary>Week by week</summary><table><thead><tr><th>Week</th><th>New</th><th>Total</th></tr></thead><tbody>' +
+        data.weeks.slice().reverse().map(function (m) {
+          return '<tr><td>Week of ' + weekFull(m.key) + '</td><td>' + m.added + '</td><td>' + m.total + '</td></tr>';
+        }).join('') + '</tbody></table></details>'
+      : '<details class="chart-table"><summary>Month by month' + (data.growth.length > 7 ? ' · full history' : '') + '</summary><table><thead><tr><th>Month</th><th>New</th><th>Total</th></tr></thead><tbody>' +
+        data.growth.slice().reverse().map(function (m) {
+          return '<tr><td>' + MONTH_NAMES[Number(m.key.slice(5)) - 1] + ' ' + m.key.slice(0, 4) + '</td><td>' + m.added + '</td><td>' + m.total + '</td></tr>';
+        }).join('') + '</tbody></table></details>';
     return '' +
 '<header class="page-head"><div><p class="eyebrow">' + esc(name) + ' · ' + esc(formatAge(ageMonths(state.child.birthday, todayIso()), name)) + '</p>' +
 '  <h1 class="h-display" tabindex="-1">Insights</h1></div>' + icon('sparkle', 56) + '</header>' +
 '<section class="growth-card" aria-labelledby="growth-h"><div class="growth-top"><div><h2 id="growth-h" class="card-label">Word growth</h2>' +
-'  <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px;flex-wrap:wrap"><span class="growth-big">+' + current.added + '</span><span class="sub" style="font-size:14px">new in ' + monthName + '</span></div></div>' +
+'  <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px;flex-wrap:wrap">' + headline + '</div></div>' +
 '  <span class="pill-sage" style="font-size:12px">Total ' + data.total + '</span></div>' +
+'  <div class="seg2" role="radiogroup" aria-label="Chart period">' +
+      ['week', 'month'].map(function (v) {
+        return '<button type="button" role="radio" aria-checked="' + (state.growthView === v) + '"' +
+          (state.growthView === v ? ' class="on"' : '') + ' data-growth-view="' + v + '">' +
+          (v === 'week' ? 'Week' : 'Month') + '</button>';
+      }).join('') + '</div>' +
 '  <div class="growth-chart" role="img" aria-label="' + esc(chartDesc) + '">' +
-      shown.map(function (m, i) {
-        var now = i === shown.length - 1;
+      bars.map(function (m, i) {
+        var now = i === bars.length - 1;
         return '<div class="bar-col"><span class="bar-val' + (now ? ' bar-val-now' : '') + '">' + m.total + '</span>' +
           '<div class="bar' + (now ? ' bar-now' : '') + '" style="height:' + Math.max(4, Math.round(m.total / max * 130)) + 'px"></div></div>';
       }).join('') +
-'  </div><div class="bar-labels" aria-hidden="true">' + shown.map(function (m) { return '<span>' + MONTH_NAMES[Number(m.key.slice(5)) - 1].slice(0, 3) + '</span>'; }).join('') + '</div>' +
-      (baselineMonth ? '<p class="fine-print">Started with ' + baselineMonth.baseline + ' already learned in ' +
-        MONTH_NAMES[Number(baselineMonth.key.slice(5)) - 1] + '.</p>' : '') +
-'  <details class="chart-table"><summary>Month by month' + (data.growth.length > 7 ? ' · full history' : '') + '</summary><table><thead><tr><th>Month</th><th>New</th><th>Total</th></tr></thead><tbody>' +
-      data.growth.slice().reverse().map(function (m) {
-        return '<tr><td>' + MONTH_NAMES[Number(m.key.slice(5)) - 1] + ' ' + m.key.slice(0, 4) + '</td><td>' + m.added + '</td><td>' + m.total + '</td></tr>';
-      }).join('') + '</tbody></table></details>' +
+'  </div><div class="bar-labels" aria-hidden="true">' + barLabel + '</div>' +
+      finePrint + chartTable +
 '</section>' +
 '<section class="lang-card" aria-labelledby="lang-h"><h2 id="lang-h" class="card-label">By language</h2>' +
       (data.byLanguage.length
@@ -1004,6 +1041,14 @@
     });
     app.querySelectorAll('[data-filter-to]').forEach(function (btn) {
       btn.addEventListener('click', function () { navigate('log', { filter: btn.getAttribute('data-filter-to') }); });
+    });
+    app.querySelectorAll('[data-growth-view]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.growthView = btn.getAttribute('data-growth-view');
+        render();
+        var again = app.querySelector('[data-growth-view="' + CSS.escape(state.growthView) + '"]');
+        if (again) again.focus();
+      });
     });
     app.querySelectorAll('[data-filter]').forEach(function (btn) {
       btn.addEventListener('click', function () {

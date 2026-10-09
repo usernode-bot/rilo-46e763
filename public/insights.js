@@ -17,6 +17,16 @@
     var y = Math.floor(i / 12), m = i % 12 + 1;
     return y + '-' + String(m).padStart(2, '0');
   }
+  function addDays(iso, n) {
+    var d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function mondayOf(iso) {
+    var d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7);
+    return d.toISOString().slice(0, 10);
+  }
 
   function summarize(entries, today) {
     // "Dated" firsts are the ones learned on a known day. Quick-start picks
@@ -65,6 +75,31 @@
       growth.push({ key: gKey, added: added, baseline: baseline, total: running });
     }
 
+    // The same series at a week's grain: the last eight weeks, each starting
+    // on a Monday, with the monthly rules carried over. Only dated firsts
+    // count as added; an onboarding batch is the baseline of its week; and
+    // when the family onboarded with quick-start picks the series starts in
+    // that week, with no empty weeks before it. History older than the
+    // window is seeded into the first bar, so the last weekly total always
+    // matches the count behind the Total badge.
+    var weekBase = addDays(mondayOf(today), -49);
+    if (anyLearned) {
+      var firstDate = entries.reduce(function (min, e) { return e.said_on < min ? e.said_on : min; }, today);
+      var firstWeek = mondayOf(firstDate);
+      if (firstWeek > weekBase) weekBase = firstWeek;
+    }
+    var weekRunning = entries.filter(function (e) { return dated(e) && e.said_on < weekBase; }).length;
+    var weekCount = Math.min(8, Math.max(1, Math.round((Date.parse(mondayOf(today)) - Date.parse(weekBase)) / (7 * 86400000)) + 1));
+    var weeks = [];
+    for (var w = 0; w < weekCount; w++) {
+      var mon = addDays(weekBase, w * 7);
+      var sun = addDays(mon, 6);
+      var wAdded = entries.filter(function (e) { return dated(e) && e.said_on >= mon && e.said_on <= sun; }).length;
+      var wBaseline = entries.filter(function (e) { return !dated(e) && e.said_on >= mon && e.said_on <= sun; }).length;
+      weekRunning += wAdded;
+      weeks.push({ key: mon, added: wAdded, baseline: wBaseline, total: weekRunning });
+    }
+
     var byLanguage = new Map();
     entries.forEach(function (e) {
       var name = e.language_name || 'No language';
@@ -88,7 +123,7 @@
       thisMonth: entries.filter(function (e) { return dated(e) && e.said_on.slice(0, 7) === current; }),
       total: entries.length,
       thisWeek: entries.filter(function (e) { return dated(e) && e.said_on >= weekStart && e.said_on <= today; }).length,
-      growth: growth, byLanguage: languageList, mastery: mastery,
+      growth: growth, weeks: weeks, byLanguage: languageList, mastery: mastery,
       alreadyLearned: entries.filter(function (e) { return !dated(e); }).length };
   }
 
