@@ -73,3 +73,44 @@ test('a backdated first starts the chart earlier than onboarding', () => {
   assert.deepEqual(data.growth.map(m => [m.key, m.added, m.baseline, m.total]),
     [['2026-08', 1, 0, 1], ['2026-09', 0, 0, 1], ['2026-10', 0, 1, 1]]);
 });
+test('weeks are eight Mondays ending with this week', () => {
+  // 2026-10-09 is a Friday: the current week is the one starting 2026-10-05.
+  const data = summarize([], '2026-10-09');
+  assert.deepEqual(data.weeks.map(w => w.start),
+    ['2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05']);
+  assert.equal(data.weeks[7].end, '2026-10-11');
+  assert.ok(data.weeks.every(w => w.added === 0 && w.baseline === 0 && w.total === 0));
+});
+test('weekly added and running total span the window', () => {
+  const data = summarize([
+    { kind: 'word', said_on: '2026-09-23', mastery: 'emerging' },
+    { kind: 'word', said_on: '2026-10-06', mastery: 'emerging' },
+    { kind: 'word', said_on: '2026-07-10', mastery: 'emerging' },
+  ], '2026-10-09');
+  const w = data.weeks;
+  // A first from before the eight weeks is in every week's total only.
+  assert.equal(w[0].total, 1);
+  assert.equal(w[0].added, 0);
+  // 2026-09-23 lands in the week starting 2026-09-21.
+  assert.equal(w[5].added, 1);
+  assert.equal(w[5].total, 2);
+  // 2026-10-06 lands in the current week, which ends on its Sunday.
+  assert.equal(w[7].added, 1);
+  assert.equal(w[7].total, 3);
+});
+test('an onboarding batch is a weekly baseline, and earlier weeks drop', () => {
+  const data = summarize([
+    { kind: 'word', said_on: '2026-10-06', already_learned: true, mastery: 'emerging' },
+    { kind: 'word', said_on: '2026-10-08', language_name: 'English', mastery: 'emerging' },
+  ], '2026-10-09');
+  // The series starts at the onboarding week, like growth starts at its month.
+  assert.equal(data.weeks.length, 1);
+  assert.deepEqual(data.weeks[0], { start: '2026-10-05', end: '2026-10-11', added: 1, baseline: 1, total: 1 });
+});
+test('weeks stay eight with no entries, and the week starts on Monday', () => {
+  assert.equal(summarize([], '2026-01-01').weeks.length, 8);
+  // Monday today: the current week is just today.
+  assert.equal(summarize([], '2026-10-05').weeks[7].start, '2026-10-05');
+  // Sunday today: the week still starts the Monday before.
+  assert.equal(summarize([], '2026-10-11').weeks[7].start, '2026-10-05');
+});
