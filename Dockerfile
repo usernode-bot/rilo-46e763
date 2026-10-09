@@ -24,6 +24,9 @@ COPY --chown=1000:1000 . .
 # After the source copy so the compiled stylesheet is not overwritten by the
 # source tree (which deliberately does not contain one).
 COPY --chown=1000:1000 --from=css /build/public/tailwind.css ./public/tailwind.css
+# The Bricolage Grotesque font, copied from its npm package by the build
+# (npm run build:fonts), so no font binary has to live in the repository.
+COPY --chown=1000:1000 --from=css /build/public/fonts/bricolage-var-latin.woff2 ./public/fonts/bricolage-var-latin.woff2
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD wget -qO- http://localhost:3000/health || exit 1

@@ -104,9 +104,9 @@ it, an optional language of the parent's own choosing, and the date — and
 every entry shows how old the child was, because the whole point is
 watching the timeline grow. Each entry also carries a **category**
 (people, animals, food, transport, play, body, home, outside, actions,
-words — inferred from the label, not asked) and a **mastery** toggle
-("Still learning" by default, because a first word is usually partial:
-"wa" for water). One screen, one primary action ("Add a first");
+words — inferred from the label, not asked) and a **mastery** stage
+(emerging by default, because a first word is usually partial: "wa" for
+water; then practicing, then mastered) with the journey between them. One screen, one primary action ("Add a first");
 the screen opens on Words, Sounds and Signs cards, each opening its own
 list, newest first grouped by age, as separate tappable module cards.
 Setup asks the child's name and birth month (month and
@@ -118,15 +118,16 @@ scope, not current.
 
 ## Design
 
-The creator's final Home and Insights mockups supersede the previous Gaia-inspired look.
+The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights and an icon set) supersedes the previous editorial look.
 
-- White ground; pale blush, sage, powder blue and butter modules; navy actions and yellow illustration accents. Tokens remain in `styles/tailwind-input.css`, with dark values following the Homeroom theme.
-- Georgia editorial headings and numbers, self-hosted Inter supporting text. Large spoken-word total and sun illustration, three equal category cards, recent entry rows, and floating Words / Insights / Add / Profile navigation.
-- Custom organic black-outline SVG art in `public/app.js` (`ART`), using one restrained color accent. Record illustrations reflect type/category; no dimensional toy-block edge.
-- Insights show actual new spoken words per calendar month (not cumulative), explicit spoken-word mastery, and language counts including unassigned/other languages. Pure calculations live in `public/insights.js`.
-- Existing forms, authorization and database columns are retained. No new tracking data, diagnostic metrics or standardized-baseline claims.
-- All tap targets are at least 44px; chart has a text description and full-history table. Navigation respects `--un-safe-inset-bottom`.
-- Every loaded screen has honest loading/error/empty handling; never show empty data while a load failed. New screens use `#insights`, `#profile`, `#log`.
+- Warm off-white ground (#F6F5F1), white cards, ink #1E2620. Four tints carry meaning: English sky, Spanish blush, signed languages butter, everything else sage (`langTone` in `public/app.js`). Tokens live in `styles/tailwind-input.css` with dark values following the Homeroom theme.
+- Bricolage Grotesque (headings, numbers) and Figtree (everything else), both self-hosted in `public/fonts`. Figtree is committed; Bricolage is copied there from its npm package (`@fontsource-variable/bricolage-grotesque`, a devDependency) by `npm run build`, and the Dockerfile copies it into the runtime image. `public/fonts/inter-var-latin.woff2` is no longer used.
+- **Offset iconography:** every icon is drawn by `icon()` from `ICONS` in `public/app.js` on a 48-unit grid: a fine ink line (`.oi`, currentColor, about 1.6px on screen at any size) over a pastel shape (`.of-*`) printed 2 units down-right, with solid ink dots (`.od`) only for eyes and tiny details. Idle nav tabs are ink only; the active tab gains its sage shape. Primary buttons carry a 3px sage offset shadow. New icons must follow the same rules.
+- The mascot is a cow (`cowShapes`): butter body, tan patches, blush snout. It appears on Welcome and Home and is the logo mark and favicon.
+- Mastery is three stages drawn as seed / sprout / flower. Insights shows a running total of all entries by month (the creator's design), languages across all entries, and mastery counts.
+- Custom classes are written outside Tailwind's layers so classes picked from lookups are never tree-shaken. Write class names as whole literals anyway.
+- All tap targets are at least 44px; the growth chart has a text label and a full-history table. Navigation respects `--un-safe-inset-bottom`. User-facing copy avoids em dashes.
+- Every loaded screen has honest loading/error/empty handling; never show empty data while a load failed. Screens: Home (no hash), `#log`, `#entry-<id>`, `#insights`, `#profile`.
 
 ## App-specific conventions
 
@@ -145,8 +146,17 @@ The creator's final Home and Insights mockups supersede the previous Gaia-inspir
   `words`); the client infers it from the label (`inferCategory` in
   `public/app.js`: phrase map first, then per-token keyword match,
   Spanish words included) and it is never a field the parent fills in.
-  `mastered` is a boolean, false by default; the add/edit sheet has a
-  Still learning / Mastered toggle and mastered rows show the sun badge.
+- **Mastery has three stages** (the creator's redesign): `mastery` is
+  `emerging` (tried it once or twice), `practicing` (uses it with a nudge)
+  or `mastered` (says it on their own); new entries start emerging, quick
+  starts practicing. `mastery_history` (jsonb) lists each stage and the day
+  it was reached: a PATCH that changes the stage appends one step dated the
+  request's today. The old `mastered` boolean is kept in step and still
+  accepted from a request that sends only it. Rows from before the stages
+  were migrated in `ensureSchema()` (mastered stays mastered, "still
+  learning" became practicing, journey = one step on `said_on`).
+- The welcome asks for the **languages at home**; each one picked is
+  created with `POST /api/languages` right after the child is saved.
 - **Sounds are animals AND things** (the creator's ask: car vroom,
   ambulance wee-o, horn beep beep) — the kind is labelled "Sound", the
   quick-start group is "Sounds", and its prompt asks for "the animal or

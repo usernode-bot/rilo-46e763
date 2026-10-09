@@ -64,13 +64,13 @@ module.exports = {
         sign: token('sign'), // signs: slate blue block
         'sign-soft': token('sign-soft'),
       },
-      // Two faces with a role each, matching the brand look: Figtree for
-      // the headings and the blocks, Inter for body text, serif italic for
-      // how a first sounds. Both variable fonts are self-hosted in
-      // public/fonts (see @font-face in styles/tailwind-input.css).
+      // Two faces with a role each (the Rilo canvas): Bricolage Grotesque
+      // for headings and numbers, Figtree for everything else. Both
+      // variable fonts are self-hosted in public/fonts (see @font-face in
+      // styles/tailwind-input.css).
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        rounded: ['Figtree', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['Figtree', 'system-ui', '-apple-system', 'sans-serif'],
+        rounded: ['"Bricolage Grotesque"', 'Figtree', 'system-ui', 'sans-serif'],
         serif: ['ui-serif', 'Georgia', '"Times New Roman"', 'serif'],
       },
       // The type scale: four sizes, and nothing in between.

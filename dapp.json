@@ -3,16 +3,16 @@
   "secrets": [],
   "tests": [
     {
-      "name": "Rilo renders on / (setup or the firsts list)",
+      "name": "Rilo renders on / (welcome or Home)",
       "path": "/",
       "expectSelector": "[data-screen='setup'], [data-screen='app']"
     },
     {
-      "id": "firsts.demo",
-      "name": "Populated demo (light)",
+      "id": "rilo.home",
+      "name": "Populated demo Home (light)",
       "path": "/?demo=1&un-theme=light",
-      "expectSelector": ".kind-card",
-      "expectText": "Latest:",
+      "expectSelector": ".hero-count",
+      "expectText": "words so far",
       "visual": true,
       "impact": [
         "public/**",
@@ -22,15 +22,15 @@
       ]
     },
     {
-      "name": "Populated demo (dark)",
+      "name": "Populated demo Home (dark)",
       "path": "/?demo=1&un-theme=dark",
       "expectSelector": "html.dark .kind-card"
     },
     {
-      "name": "Word insights and monthly chart",
+      "name": "Insights: growth, languages, mastery and play ideas",
       "path": "/?demo=1&un-theme=light#insights",
       "expectSelector": ".growth-chart",
-      "expectText": "What to try next"
+      "expectText": "Play ideas for this week"
     },
     {
       "name": "Child profile",
@@ -39,10 +39,16 @@
       "expectText": "Edit child profile"
     },
     {
-      "name": "Searchable entry collection",
+      "name": "Searchable log grouped by age",
       "path": "/?demo=1#log",
       "expectSelector": "#word-search",
-      "expectText": "Word collection"
+      "expectText": "’s log"
+    },
+    {
+      "name": "Mastery legend on the log",
+      "path": "/?demo=1#log",
+      "expectSelector": ".legend",
+      "expectText": "Practicing"
     }
   ]
 }
