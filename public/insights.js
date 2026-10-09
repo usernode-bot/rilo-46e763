@@ -19,6 +19,10 @@
   }
 
   function summarize(entries, today) {
+    // "Dated" firsts are the ones learned on a known day. Quick-start picks
+    // are flagged already_learned: they count in totals, languages and
+    // mastery, but never as something new learned this week or this month.
+    function dated(e) { return e.already_learned !== true; }
     var words = entries.filter(function (e) { return e.kind === 'word'; });
     var counts = { word: words.length, sound: 0, sign: 0, mastered: 0 };
     var languages = new Map();
@@ -38,21 +42,27 @@
     var months = [];
     for (var i = start; i <= end; i++) {
       var key = monthKey(i);
-      months.push({ key: key, count: words.filter(function (e) { return e.said_on.slice(0, 7) === key; }).length });
+      months.push({ key: key, count: words.filter(function (e) { return dated(e) && e.said_on.slice(0, 7) === key; }).length });
     }
 
     // Everything the child has: words, sounds and signs together.
-    // growth: each month's new entries and the running total at its end,
-    // from the first entry (at least seven months shown).
+    // growth: each month's new entries and the running total at its end.
+    // When the family onboarded with quick-start picks, growth starts in
+    // that first month with no padding before it, the chart counts only
+    // dated firsts (the onboarding month starts empty), and each month also
+    // carries how many were already learned there. Otherwise, at least
+    // seven months are shown, as before.
+    var anyLearned = entries.some(function (e) { return !dated(e); });
     var firstAll = entries.reduce(function (min, e) { return e.said_on.slice(0, 7) < min ? e.said_on.slice(0, 7) : min; }, current);
-    var gStart = Math.min(end - 6, monthIndex(firstAll));
+    var gStart = anyLearned ? monthIndex(firstAll) : Math.min(end - 6, monthIndex(firstAll));
     var running = 0;
     var growth = [];
     for (var g = gStart; g <= end; g++) {
       var gKey = monthKey(g);
-      var added = entries.filter(function (e) { return e.said_on.slice(0, 7) === gKey; }).length;
+      var added = entries.filter(function (e) { return dated(e) && e.said_on.slice(0, 7) === gKey; }).length;
+      var baseline = entries.filter(function (e) { return !dated(e) && e.said_on.slice(0, 7) === gKey; }).length;
       running += added;
-      growth.push({ key: gKey, added: added, total: running });
+      growth.push({ key: gKey, added: added, baseline: baseline, total: running });
     }
 
     var byLanguage = new Map();
@@ -75,10 +85,11 @@
     var weekStart = weekAgo.toISOString().slice(0, 10);
 
     return { counts: counts, languages: Array.from(languages.values()), months: months,
-      thisMonth: entries.filter(function (e) { return e.said_on.slice(0, 7) === current; }),
+      thisMonth: entries.filter(function (e) { return dated(e) && e.said_on.slice(0, 7) === current; }),
       total: entries.length,
-      thisWeek: entries.filter(function (e) { return e.said_on >= weekStart && e.said_on <= today; }).length,
-      growth: growth, byLanguage: languageList, mastery: mastery };
+      thisWeek: entries.filter(function (e) { return dated(e) && e.said_on >= weekStart && e.said_on <= today; }).length,
+      growth: growth, byLanguage: languageList, mastery: mastery,
+      alreadyLearned: entries.filter(function (e) { return !dated(e); }).length };
   }
 
   var api = { summarize: summarize, masteryOf: masteryOf };
