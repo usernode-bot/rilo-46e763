@@ -476,10 +476,9 @@
   }
 
   // ── Presenting: the kit, with a plain fallback ────────────────────────
-  function presentSheet(contentEl, onDismiss) {
-    if (window.unNative && window.unNative.presentSheet) {
-      return window.unNative.presentSheet({ contentEl: contentEl, onDismiss: onDismiss });
-    }
+  // The plain fallback for when the kit is not loaded: a fixed overlay
+  // with a backdrop and a capped scrollable card.
+  function plainCard(contentEl, onDismiss) {
     var wrap = document.createElement('div');
     wrap.style.cssText = 'position:fixed;inset:0;z-index:40';
     var backdrop = document.createElement('div');
@@ -500,6 +499,24 @@
     }
     backdrop.addEventListener('click', close);
     return { dismiss: close, el: card };
+  }
+
+  function presentSheet(contentEl, onDismiss) {
+    if (window.unNative && window.unNative.presentSheet) {
+      return window.unNative.presentSheet({ contentEl: contentEl, onDismiss: onDismiss });
+    }
+    return plainCard(contentEl, onDismiss);
+  }
+
+  // The entry form is taller than a phone screen, and the kit's bottom
+  // sheet cannot scroll tall content (its surface belongs to the drag to
+  // close), so it presents as the kit's centered modal, which scrolls
+  // inside the card and handles the keyboard.
+  function presentForm(contentEl, onDismiss) {
+    if (window.unNative && window.unNative.presentModal) {
+      return window.unNative.presentModal({ contentEl: contentEl, onDismiss: onDismiss });
+    }
+    return plainCard(contentEl, onDismiss);
   }
 
   function toast(message) {
@@ -1328,7 +1345,7 @@
     var content = document.createElement('form');
     content.novalidate = true;
     content.innerHTML = entrySheetHtml(entry, form);
-    var sheet = presentSheet(content, null);
+    var sheet = presentForm(content, null);
     var errEl = content.querySelector('[data-form-error]');
     var name = state.child.name;
 
