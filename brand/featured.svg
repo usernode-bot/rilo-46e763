@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="720" height="720">
+  <g transform="translate(0,20)">
+    <path d="M300 300 h424 a110 110 0 0 1 110 110 v170 a110 110 0 0 1 -110 110 h-210 l-120 104 v-104 h-94 a110 110 0 0 1 -110 -110 v-170 a110 110 0 0 1 110 -110 z" transform="translate(26,26)" fill="#000000" stroke="#000000" stroke-width="34" stroke-linejoin="round"/>
+    <path d="M300 300 h424 a110 110 0 0 1 110 110 v170 a110 110 0 0 1 -110 110 h-210 l-120 104 v-104 h-94 a110 110 0 0 1 -110 -110 v-170 a110 110 0 0 1 110 -110 z" fill="#FFEE6F" stroke="#000000" stroke-width="34" stroke-linejoin="round"/>
+    <path d="M512 600 c-70 -48 -118 -88 -118 -140 c0 -38 30 -66 64 -66 c24 0 42 12 54 32 c12 -20 30 -32 54 -32 c34 0 64 28 64 66 c0 52 -48 92 -118 140 z" fill="#3090E1" stroke="#000000" stroke-width="26" stroke-linejoin="round"/>
+    <path d="M150 210 l18 46 46 18 -46 18 -18 46 -18 -46 -46 -18 46 -18 z" fill="#A9CF97" stroke="#000000" stroke-width="16" stroke-linejoin="round"/>
+    <path d="M880 160 l14 36 36 14 -36 14 -14 36 -14 -36 -36 -14 36 -14 z" fill="#FFFEEA" stroke="#000000" stroke-width="16" stroke-linejoin="round"/>
+    <circle cx="860" cy="760" r="30" fill="#A9CF97" stroke="#000000" stroke-width="16"/>
+  </g>
+</svg>

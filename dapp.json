@@ -50,5 +50,9 @@
       "expectSelector": ".legend",
       "expectText": "Practicing"
     }
-  ]
+  ],
+  "icon": {
+    "image": "brand/icon.png",
+    "emoji": "💬"
+  }
 }
