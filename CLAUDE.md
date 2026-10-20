@@ -109,12 +109,13 @@ words — inferred from the label, not asked) and a **mastery** stage
 water; then practicing, then mastered) with the journey between them. One screen, one primary action ("Add a first");
 the screen opens on Words, Sounds and Signs cards, each opening its own
 list, newest first grouped by age, as separate tappable module cards.
-Setup asks the child's name and birth month (month and
-year, not a full birthday) once, then offers a quick start: tap the
-common words, sounds and signs the child already does, and they are
-saved dated the day the family started using Rilo. More than one child,
-audio recordings of pronunciation, and renaming languages are later
-scope, not current.
+Setup asks the app language (English or Español), the child's name and
+birth month (month and year, not a full birthday) once, then offers a
+quick start: tap the words, sounds and signs the child already does. The
+ideas are matched to the child's age and shown a dozen at a time, with
+More ideas until the parent taps Done; picks are saved dated the day the
+family started using Rilo. More than one child, audio recordings of
+pronunciation, and renaming languages are later scope, not current.
 
 ## Design
 
@@ -125,6 +126,7 @@ The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights
 - **Offset iconography:** every icon is drawn by `icon()` from `ICONS` in `public/app.js` on a 48-unit grid: a fine ink line (`.oi`, currentColor, about 1.6px on screen at any size) over a pastel shape (`.of-*`) printed 2 units down-right, with solid ink dots (`.od`) only for eyes and tiny details. Idle nav tabs are ink only; the active tab gains its sage shape. Primary buttons carry a 3px sage offset shadow. New icons must follow the same rules.
 - The mascot is a cow (`cowShapes`): butter body, tan patches, blush snout. It appears on Welcome and Home and is the logo mark and favicon.
 - Mastery is three stages drawn as seed / sprout / flower. Insights shows a running total of all entries by month or by week (last 8 Monday weeks, a Week/Month toggle on the growth card, Month by default; the creator's design), languages across all entries, and mastery counts.
+- **App language control:** the same two-option `seg2` as the Week/Month toggle, labelled App language ("Idioma de la app"), on the welcome screen and in Edit details. Options stay "English" and "Español" in both languages. More ideas is a full-width secondary button at the end of the quick start's lists; Done is the pinned primary action.
 - Custom classes are written outside Tailwind's layers so classes picked from lookups are never tree-shaken. Write class names as whole literals anyway.
 - All tap targets are at least 44px; the growth chart has a text label and a full-history table. Navigation respects `--un-safe-inset-bottom`. User-facing copy avoids em dashes.
 - Every loaded screen has honest loading/error/empty handling; never show empty data while a load failed. Screens: Home (no hash), `#log`, `#entry-<id>`, `#insights`, `#profile`.
@@ -134,6 +136,26 @@ The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights
 - All five tables (`children`, `languages`, `entries`, `concepts`,
   `demo_seeds`) are `staging:private` and per owner: every query is scoped to
   `owner_id = String(req.user.id)`; there are no public tables.
+- **Interface language.** `children.ui_language` is `text`, nullable
+  (`'en'`, `'es'`, or null reading as English), added forward-only with
+  `ADD COLUMN IF NOT EXISTS`. `PUT /api/child` accepts it and keeps the
+  stored value when absent; the welcome and the Edit details sheet both
+  offer English and Español. Every user-facing string is in
+  `public/i18n.js` (`STRINGS.en` / `STRINGS.es`, same keys, parameterised
+  entries are functions) and read through `t()` in `public/app.js`;
+  dates and ages use the chosen language. New copy goes in both
+  languages, and server validation messages get a `SERVER_ERRORS_ES`
+  entry. Saved words and language names never change with the app
+  language.
+- **Age-matched quick-start ideas.** `public/i18n.js` holds about 144
+  curated ideas in four bands (about 12, 18, 24 and 36 months), each 24
+  words, 9 sounds and 3 signs with `en`/`es` wording and a server
+  `category`. `bandFor(months)` uses under 15 / 15 to 20 / 21 to 29 / 30
+  and up; `ideasFor(months)` starts at the child's band, then younger
+  bands nearest first, then older, and lays them out in batches of 8
+  words, 3 sounds and 1 sign (`BATCH = 12`). The quick start shows
+  `state.quickShown` ideas, More ideas adds a batch, and Done saves every
+  pick from every batch. `POST /api/quick-start` accepts up to 200.
 - **One card per word: concepts.** A concept groups the entries that are the
   same word in different languages ("agua" and "water" on one card).
   `entries.concept_id` (nullable, added forward-only) names it; every entry

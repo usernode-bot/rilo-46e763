@@ -252,7 +252,7 @@ app.get('/api/state', wrap(async (req, res) => {
     }
   }
   const child = await pool.query(
-    'SELECT name, birthday::text AS birthday, is_demo FROM children WHERE owner_id = $1',
+    'SELECT name, birthday::text AS birthday, is_demo, ui_language FROM children WHERE owner_id = $1',
     [ownerId]);
   const languages = await pool.query(
     `SELECT l.id, l.name, l.is_demo,
@@ -292,13 +292,20 @@ app.put('/api/child', wrap(async (req, res) => {
   }
   // Stored as the month's first day; every age is counted from the month.
   const birthday = birthMonth + '-01';
+  // The app language is a setting on the child, so it follows the family
+  // to any device. An absent value keeps what was stored.
+  const uiLanguage = req.body.ui_language === undefined ? null : req.body.ui_language;
+  if (uiLanguage !== null && uiLanguage !== 'en' && uiLanguage !== 'es') {
+    return res.status(400).json({ error: 'Pick English or Spanish.' });
+  }
   const saved = await pool.query(
-    `INSERT INTO children (owner_id, name, birthday)
-     VALUES ($1, $2, $3)
+    `INSERT INTO children (owner_id, name, birthday, ui_language)
+     VALUES ($1, $2, $3, $4)
      ON CONFLICT (owner_id) DO UPDATE
-       SET name = $2, birthday = $3, is_demo = false, updated_at = NOW()
-     RETURNING name, birthday::text AS birthday, is_demo`,
-    [ownerId, name, birthday]);
+       SET name = $2, birthday = $3, ui_language = COALESCE($4, children.ui_language),
+           is_demo = false, updated_at = NOW()
+     RETURNING name, birthday::text AS birthday, is_demo, ui_language`,
+    [ownerId, name, birthday, uiLanguage]);
   res.json(saved.rows[0]);
 }));
 
@@ -478,8 +485,8 @@ app.post('/api/quick-start', wrap(async (req, res) => {
   if (!items || !items.length) {
     return res.status(400).json({ error: 'Choose at least one first to add.' });
   }
-  if (items.length > 30) {
-    return res.status(400).json({ error: 'Add up to 30 at a time.' });
+  if (items.length > 200) {
+    return res.status(400).json({ error: 'Add up to 200 at a time.' });
   }
   const child = await pool.query(
     'SELECT birthday::text AS birthday FROM children WHERE owner_id = $1',
@@ -769,6 +776,12 @@ async function ensureSchema() {
           SELECT owner_id, created_at FROM entries WHERE NOT is_demo
           GROUP BY owner_id, created_at HAVING count(*) > 1)`);
   }
+  // The app language (English or Spanish) is a setting on the child, saved
+  // with setup so it follows the family to any device. Null reads as
+  // English, so existing families stay in English until they choose.
+  await pool.query(`
+    ALTER TABLE children ADD COLUMN IF NOT EXISTS ui_language text;
+  `);
   // All five tables hold personal family data: private, and staged without
   // their rows (see "Public vs private tables" in the platform conventions).
   await pool.query(`COMMENT ON TABLE children IS 'staging:private'`);
