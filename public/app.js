@@ -25,6 +25,15 @@
     });
   }
 
+  // Every piece of copy comes through here, so a screen is never half
+  // translated: the dictionary holds the same keys in English and Spanish.
+  function t(key) {
+    var dict = window.RiloI18n.STRINGS[state.uiLang] || window.RiloI18n.STRINGS.en;
+    var value = dict[key] !== undefined ? dict[key] : window.RiloI18n.STRINGS.en[key];
+    if (typeof value === 'function') return value.apply(null, Array.prototype.slice.call(arguments, 1));
+    return value === undefined ? key : value;
+  }
+
   function api(path, opts) {
     opts = opts || {};
     var search = [];
@@ -40,7 +49,11 @@
         var body = {};
         try { body = text ? JSON.parse(text) : {}; } catch (e) { body = {}; }
         if (!res.ok) {
-          var err = new Error(body.error || 'Something went wrong. Try again.');
+          var message = body.error || t('genericError');
+          if (state.uiLang === 'es' && window.RiloI18n.SERVER_ERRORS_ES[message]) {
+            message = window.RiloI18n.SERVER_ERRORS_ES[message];
+          }
+          var err = new Error(message);
           err.status = res.status;
           err.code = body.error;
           throw err;
@@ -196,28 +209,22 @@
     return (t.y - b.y) * 12 + (t.m - b.m) - (t.d < b.d ? 1 : 0);
   }
   function formatAge(months, name) {
-    if (months < 0) return 'Before ' + name + "'s birthday";
-    if (months === 0) return 'Under 1 month';
-    var y = Math.floor(months / 12);
-    var m = months % 12;
-    var yPart = y === 1 ? '1 year' : y > 1 ? y + ' years' : '';
-    var mPart = m === 1 ? '1 month' : m > 1 ? m + ' months' : '';
-    if (!y) return mPart;
-    if (!m) return yPart;
-    return yPart + ' ' + mPart;
+    return t('formatAge', months, name);
   }
   var fmtCache = {};
   function fmt(iso, opts, key) {
+    var locale = state.uiLang === 'es' ? 'es' : 'en';
+    key = locale + ':' + key;
     if (!fmtCache[key]) {
       // An unusual browser locale string must never stop the page drawing.
-      try { fmtCache[key] = new Intl.DateTimeFormat(navigator.language || 'en', opts); }
+      try { fmtCache[key] = new Intl.DateTimeFormat(locale, opts); }
       catch (e) { fmtCache[key] = new Intl.DateTimeFormat('en', opts); }
     }
     return fmtCache[key].format(new Date(iso + 'T00:00:00'));
   }
   function fmtShort(iso) {
     var sameYear = iso.slice(0, 4) === String(nowDate().getFullYear());
-    if (iso === todayIso()) return 'Today';
+    if (iso === todayIso()) return t('today');
     return sameYear
       ? fmt(iso, { month: 'short', day: 'numeric' }, 'short')
       : fmt(iso, { month: 'short', day: 'numeric', year: 'numeric' }, 'shortY');
@@ -234,13 +241,12 @@
     return d.toISOString().slice(0, 10);
   }
 
-  var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
+  function monthNames() { return t('monthNames'); }
 
   // The birth month and year, two selects: month and year is all a birthday
   // needs to be here, and a select works on every phone (the creator's ask).
   function monthSelectHtml(id, mm) {
-    return '<select id="' + id + '" class="field">' + MONTH_NAMES.map(function (m, i) {
+    return '<select id="' + id + '" class="field">' + monthNames().map(function (m, i) {
       var v = pad(i + 1);
       return '<option value="' + v + '"' + (mm === v ? ' selected' : '') + '>' + m + '</option>';
     }).join('') + '</select>';
@@ -254,32 +260,39 @@
   }
 
   // ── Words for things ─────────────────────────────────────────────────
+  // Labels are read at draw time, so switching language redraws them all.
   var KINDS = {
     word: {
-      one: 'Word', many: 'Words', the: 'The word', eg: 'e.g. ball',
-      how: function (name) { return 'How ' + name + ' says it'; },
-      hint: 'e.g. “ba” for ball',
+      get one() { return t('kindWord'); }, get many() { return t('kindWords'); },
+      get the() { return t('kindWordThe'); }, get eg() { return t('kindWordEg'); },
+      how: function (name) { return t('kindWordHow', name); },
+      get hint() { return t('kindWordHint'); },
       tone: 'sky', icon: 'word',
     },
     sound: {
-      one: 'Sound', many: 'Sounds', the: 'The animal or thing', eg: 'e.g. cow or car',
-      how: function (name) { return 'The sound ' + name + ' makes'; },
-      hint: 'e.g. moo, vroom',
+      get one() { return t('kindSound'); }, get many() { return t('kindSounds'); },
+      get the() { return t('kindSoundThe'); }, get eg() { return t('kindSoundEg'); },
+      how: function (name) { return t('kindSoundHow', name); },
+      get hint() { return t('kindSoundHint'); },
       tone: 'blush', icon: 'sound',
     },
     sign: {
-      one: 'Sign', many: 'Signs', the: 'What the sign means', eg: 'e.g. more',
-      how: function (name) { return 'How ' + name + ' signs it'; },
-      hint: 'e.g. taps fingertips together',
+      get one() { return t('kindSign'); }, get many() { return t('kindSigns'); },
+      get the() { return t('kindSignThe'); }, get eg() { return t('kindSignEg'); },
+      how: function (name) { return t('kindSignHow', name); },
+      get hint() { return t('kindSignHint'); },
       tone: 'butter', icon: 'sign',
     },
   };
 
   var MASTERY = {
-    emerging: { label: 'Emerging', icon: 'seed', hint: 'Tried it once or twice' },
-    practicing: { label: 'Practicing', icon: 'sprout', hint: 'Uses it with a nudge' },
-    mastered: { label: 'Mastered', icon: 'flower', hint: 'Says it on their own' },
+    emerging: { get label() { return t('emerging'); }, icon: 'seed', get hint() { return t('emergingHint'); } },
+    practicing: { get label() { return t('practicing'); }, icon: 'sprout', get hint() { return t('practicingHint'); } },
+    mastered: { get label() { return t('mastered'); }, icon: 'flower', get hint() { return t('masteredHint'); } },
   };
+  function kindPlural(kind) {
+    return kind === 'sound' ? t('soundsPlural') : kind === 'sign' ? t('signsPlural') : t('wordsPlural');
+  }
   var M_PILL = { emerging: 'm-pill m-pill-emerging', practicing: 'm-pill m-pill-practicing', mastered: 'm-pill m-pill-mastered' };
   function masteryOf(e) { return window.RiloInsights.masteryOf(e); }
   function masteryIcon(level, size) {
@@ -291,33 +304,31 @@
   // already learned, with no date, each at the stage the parent chose.
   // Sounds are anything that makes a sound, animals and things alike: a car
   // goes vroom, a horn goes beep beep.
-  var QUICK_STARTS = [
-    { group: 'Words', kind: 'word', items: [
-      { label: 'mama' }, { label: 'dada' }, { label: 'ball' }, { label: 'milk' },
-      { label: 'water' }, { label: 'bye' }, { label: 'no' }, { label: 'uh-oh' },
-      { label: 'kitty' }, { label: 'dog' }, { label: 'book' }, { label: 'more' },
-    ] },
-    { group: 'Sounds', kind: 'sound', items: [
-      { label: 'cow', sounds_like: 'moo' },
-      { label: 'dog', sounds_like: 'woof woof' },
-      { label: 'cat', sounds_like: 'meow' },
-      { label: 'sheep', sounds_like: 'baa' },
-      { label: 'duck', sounds_like: 'quack' },
-      { label: 'car', sounds_like: 'vroom' },
-      { label: 'ambulance', sounds_like: 'wee-o wee-o' },
-      { label: 'horn', sounds_like: 'beep beep' },
-    ] },
-    { group: 'Signs', kind: 'sign', items: [
-      { label: 'more', sounds_like: 'Taps fingertips together' },
-      { label: 'milk', sounds_like: 'Squeezes a fist' },
-      { label: 'all done', sounds_like: 'Twists both hands' },
-      { label: 'bye', sounds_like: 'Opens and closes a hand' },
-      { label: 'eat', sounds_like: 'Taps fingers to mouth' },
-    ] },
-  ];
+  // The ideas come from the shared catalogue (public/i18n.js), which orders
+  // them for the child's age: a dozen at first, then a dozen more per tap.
+  function quickIdeas() {
+    var months = state.child ? ageMonths(state.child.birthday, todayIso()) : 12;
+    return window.RiloI18n.ideasFor(months);
+  }
+  // The creator's ask: once most of the ideas on screen are picked, reveal
+  // the next dozen on their own, so a parent tapping through rarely has to
+  // reach for More ideas. The catalogue counts each kind (words, sounds,
+  // signs) on its own, so the signs and sounds grow the list too.
+  function autoGrowQuickStart() {
+    var ideas = quickIdeas();
+    if (state.quickShown >= ideas.length) return;
+    if (window.RiloI18n.growsQuickStart(ideas.slice(0, state.quickShown), state.quickPick)) {
+      state.quickShown = Math.min(ideas.length, state.quickShown + window.RiloI18n.BATCH);
+    }
+  }
 
-  // Languages offered on the welcome screen. Anything else can be typed.
-  var SETUP_LANGS = ['English', 'Spanish', 'ASL', 'French'];
+  // Languages offered on the welcome screen, by code, named in the app
+  // language. Anything else can be typed.
+  var SETUP_LANGS = ['en', 'es', 'asl', 'fr'];
+  function setupLangName(code) {
+    var names = { en: 'setupLangEn', es: 'setupLangEs', asl: 'setupLangAsl', fr: 'setupLangFr' };
+    return names[code] ? t(names[code]) : code;
+  }
 
   // Categories are inferred from entry labels, including Spanish.
   // Phrases checked whole first, then single words.
@@ -436,11 +447,17 @@
     search: '',
     filter: 'all', // all | word | sound | sign | emerging | practicing | mastered | month | lang:<name>
     sessionLangs: [], // languages created this session, still unused
-    quickPick: {}, // quick-start picks: item id -> mastery stage ('emerging'|'practicing'|'mastered')
+    quickPick: {}, // quick-start picks: idea id -> mastery stage ('emerging'|'practicing'|'mastered')
+    quickShown: 12, // how many quick-start ideas are on screen
     growthView: 'month', // insights growth card: 'week' | 'month' (month every time Rilo opens)
-    setupLangs: { English: true },
+    // Before a child is saved, the welcome follows the browser: Spanish in a
+    // Spanish browser, English otherwise.
+    uiLang: /^es\b/i.test(navigator.language || '') ? 'es' : 'en',
+    setupLangs: {},
     setupExtra: [],
+    setupDraft: { name: '', month: null, year: null, other: '', otherOpen: false },
   };
+  state.setupLangs[state.uiLang] = true;
 
   // One card per word: the counts and the log work on concepts, each holding
   // the entries that are the same word in different languages.
@@ -471,7 +488,7 @@
   }
   function joinNames(list) {
     if (list.length <= 1) return list.join('');
-    return list.slice(0, -1).join(', ') + ' & ' + list[list.length - 1];
+    return list.slice(0, -1).join(', ') + ' ' + t('and') + ' ' + list[list.length - 1];
   }
   function mostUsedLanguageId() {
     var used = state.languages.filter(function (l) { return l.uses > 0; })
@@ -548,14 +565,14 @@
         title: title,
         message: message,
         buttons: [
-          { label: 'Keep it', style: 'cancel' },
-          { label: 'Delete', style: 'destructive' },
+          { label: t('keepIt'), style: 'cancel' },
+          { label: t('delete'), style: 'destructive' },
         ],
       }).then(function (result) {
         var button = result && result.button;
-        if (button && typeof button === 'object') return button.label === 'Delete';
-        var buttons = [{ label: 'Keep it' }, { label: 'Delete' }];
-        return buttons[button] && buttons[button].label === 'Delete';
+        if (button && typeof button === 'object') return button.label === t('delete');
+        var buttons = [{ label: t('keepIt') }, { label: t('delete') }];
+        return buttons[button] && buttons[button].label === t('delete');
       });
     }
     return Promise.resolve(window.confirm(title + ' ' + message));
@@ -563,6 +580,7 @@
 
   // ── Screens ──────────────────────────────────────────────────────────
   function render() {
+    document.documentElement.lang = state.uiLang;
     if (state.screen === 'loading') app.innerHTML = loadingHtml();
     else if (state.screen === 'error') app.innerHTML = errorHtml();
     else if (!state.child) app.innerHTML = setupHtml();
@@ -582,13 +600,12 @@
   }
 
   function errorHtml() {
-    var who = state.child && state.child.name ? esc(state.child.name) + '’s' : 'the';
     return '' +
 '<main data-screen="error" class="page page-plain">' +
 '  <div class="state-error">' + icon('cow', 64) +
-'    <p>Couldn’t load ' + who + ' words.</p>' +
-'    <p class="sub">Nothing you saved is lost. Check your connection and try again.</p>' +
-'    <button type="button" id="retry" class="btn-secondary">Retry</button>' +
+'    <p>' + esc(t('errorLoad', state.child && state.child.name || null)) + '</p>' +
+'    <p class="sub">' + esc(t('errorLoadBody')) + '</p>' +
+'    <button type="button" id="retry" class="btn-secondary">' + esc(t('retry')) + '</button>' +
 '  </div>' +
 '</main>';
   }
@@ -596,39 +613,51 @@
   function brandHtml(step) {
     return '<div class="brand-row"><div class="brand">' + icon('cow', 30) +
       '<span class="brand-name">rilo</span></div>' +
-      '<div class="steps" aria-label="Step ' + step + ' of 2"><span class="' + (step === 1 ? 'on' : '') + '"></span><span class="' + (step === 2 ? 'on' : '') + '"></span></div></div>';
+      '<div class="steps" aria-label="' + esc(t('stepOf', step)) + '"><span class="' + (step === 1 ? 'on' : '') + '"></span><span class="' + (step === 2 ? 'on' : '') + '"></span></div></div>';
   }
 
   // The welcome: the child's name, birth month and the languages at home.
   function setupHtml() {
     var now = nowDate();
+    var draft = state.setupDraft;
     var langs = SETUP_LANGS.concat(state.setupExtra);
+    var month = draft.month || pad(now.getMonth() + 1);
+    var year = draft.year || now.getFullYear();
+    function langButton(code, on) {
+      return '<button type="button" role="radio" data-app-lang="' + code + '" aria-checked="' + on + '"' +
+        (on ? ' class="on"' : '') + '>' + esc(t(code === 'es' ? 'spanish' : 'english')) + '</button>';
+    }
     return '' +
 '<main data-screen="setup" class="page page-plain">' + brandHtml(1) +
 '  <div class="setup-art">' + welcomeSceneSvg() + '</div>' +
-'  <div><h1 class="setup-title">Every little word,<br>in every language.</h1>' +
-'  <p class="sub" style="margin-top:8px">Tell us about your little one. You can change this anytime.</p></div>' +
+'  <div><h1 class="setup-title">' + esc(t('welcomeTitle1')) + '<br>' + esc(t('welcomeTitle2')) + '</h1>' +
+'  <p class="sub" style="margin-top:8px">' + esc(t('welcomeSub')) + '</p></div>' +
 '  <form id="setup-form" class="flex flex-col gap-4" novalidate>' +
-'    <div><label class="field-label" for="setup-name">Child’s name</label>' +
-'      <input id="setup-name" class="field" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Luna"></div>' +
+'    <div><span class="field-label" id="setup-lang-label">' + esc(t('appLanguage')) + '</span>' +
+'      <div class="seg2" role="radiogroup" aria-labelledby="setup-lang-label">' +
+        langButton('en', state.uiLang === 'en') + langButton('es', state.uiLang === 'es') +
+'      </div></div>' +
+'    <div><label class="field-label" for="setup-name">' + esc(t('childName')) + '</label>' +
+'      <input id="setup-name" class="field" type="text" maxlength="40" autocomplete="off" placeholder="' + esc(t('namePlaceholder')) + '" value="' + esc(draft.name) + '"></div>' +
 '    <div class="grid grid-cols-2 gap-3">' +
-'      <div><label class="field-label" for="setup-month">Birth month</label>' + monthSelectHtml('setup-month', pad(now.getMonth() + 1)) + '</div>' +
-'      <div><label class="field-label" for="setup-year">Year</label>' + yearSelectHtml('setup-year', now.getFullYear()) + '</div>' +
+'      <div><label class="field-label" for="setup-month">' + esc(t('birthMonth')) + '</label>' + monthSelectHtml('setup-month', month) + '</div>' +
+'      <div><label class="field-label" for="setup-year">' + esc(t('year')) + '</label>' + yearSelectHtml('setup-year', year) + '</div>' +
 '    </div>' +
-'    <fieldset><legend class="field-label">Languages at home</legend>' +
+'    <fieldset><legend class="field-label">' + esc(t('languagesAtHome')) + '</legend>' +
 '      <div class="chips-row" data-setup-langs>' +
-        langs.map(function (name) {
-          var on = !!state.setupLangs[name];
-          return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-setup-lang="' + esc(name) + '" aria-pressed="' + on + '">' + esc(name) + '</button>';
+        langs.map(function (key) {
+          var on = !!state.setupLangs[key];
+          var label = SETUP_LANGS.indexOf(key) !== -1 ? setupLangName(key) : key;
+          return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-setup-lang="' + esc(key) + '" aria-pressed="' + on + '">' + esc(label) + '</button>';
         }).join('') +
-'        <button type="button" class="chip chip-dashed" data-setup-other>+ Other</button>' +
+'        <button type="button" class="chip chip-dashed" data-setup-other>' + esc(t('otherLanguage')) + '</button>' +
 '      </div>' +
-'      <div data-setup-other-area hidden class="mt-3 flex gap-2"><label class="sr-only" for="setup-other">Another language</label>' +
-'        <input id="setup-other" class="field" type="text" maxlength="30" autocomplete="off" placeholder="e.g. Portuguese">' +
-'        <button type="button" class="btn-secondary" data-setup-other-add>Add</button></div>' +
+'      <div data-setup-other-area' + (draft.otherOpen ? '' : ' hidden') + ' class="mt-3 flex gap-2"><label class="sr-only" for="setup-other">' + esc(t('anotherLanguage')) + '</label>' +
+'        <input id="setup-other" class="field" type="text" maxlength="30" autocomplete="off" placeholder="' + esc(t('otherPlaceholder')) + '" value="' + esc(draft.other) + '">' +
+'        <button type="button" class="btn-secondary" data-setup-other-add>' + esc(t('add')) + '</button></div>' +
 '    </fieldset>' +
 '    <p id="setup-error" hidden class="form-error"></p>' +
-'    <button type="submit" class="btn-primary" data-setup-go>Start the word list ' + icon('arrow', 20, { fill: 'none' }) + '</button>' +
+'    <button type="submit" class="btn-primary" data-setup-go>' + esc(t('startWordList')) + ' ' + icon('arrow', 20, { fill: 'none' }) + '</button>' +
 '  </form>' +
 '</main>';
   }
@@ -637,38 +666,46 @@
   // give each pick its stage, or skip and add entries one at a time.
   function quickstartHtml() {
     var name = state.child.name;
+    var ideas = quickIdeas();
+    var shown = ideas.slice(0, state.quickShown);
     var n = Object.keys(state.quickPick).length;
-    return '' +
-'<main data-screen="quickstart" class="page">' + brandHtml(2) +
-'  <div><h1 class="setup-title">What does ' + esc(name) + ' already do?</h1>' +
-'  <p class="sub" style="margin-top:8px">Tap everything ' + esc(name) + ' already says or signs. Rilo keeps them as already learned, with no date. ' +
-      'Tap a pick’s stage to show how well ' + esc(name) + ' says it, like Emerging for “wa” for water.</p></div>' +
-    QUICK_STARTS.map(function (group) {
-      var k = KINDS[group.kind];
+    var sections = ['word', 'sound', 'sign'].map(function (kind) {
+      var items = shown.filter(function (idea) { return idea.kind === kind; });
+      if (!items.length) return '';
+      var k = KINDS[kind];
       return '<section class="flex flex-col gap-3"><h2 class="section-heading" style="justify-content:flex-start;gap:8px">' +
-        icon(k.icon, 26) + '<span class="font-display" style="font-size:18px;font-weight:600">' + esc(group.group) + '</span></h2>' +
+        icon(k.icon, 26) + '<span class="font-display" style="font-size:18px;font-weight:600">' + esc(k.many) + '</span></h2>' +
         '<div class="chips-row">' +
-        group.items.map(function (item, i) {
-          var id = group.kind + '-' + i;
-          var text = item.sounds_like && group.kind === 'sound' ? item.label + ' · ' + item.sounds_like : item.label;
-          var level = state.quickPick[id];
+        items.map(function (idea) {
+          var words = idea[state.uiLang] || idea.en;
+          var text = words.sounds_like && kind === 'sound' ? words.label + ' · ' + words.sounds_like : words.label;
+          var level = state.quickPick[idea.id];
           var chip = '<button type="button" class="chip' + (level ? ' chip-on' : '') +
-            '" data-quick="' + id + '" aria-pressed="' + !!level + '">' + esc(text) + '</button>';
+            '" data-quick="' + esc(idea.id) + '" aria-pressed="' + !!level + '">' + esc(text) + '</button>';
           if (!level) return chip;
           // A picked chip carries its own small stage button, which cycles
           // emerging, practicing, mastered.
           return '<span class="qs-pick">' + chip +
-            '<button type="button" class="qs-stage qs-stage-' + level + '" data-quick-stage="' + id +
-            '" aria-label="Stage for ' + esc(item.label) + ': ' + MASTERY[level].label + '">' +
+            '<button type="button" class="qs-stage qs-stage-' + level + '" data-quick-stage="' + esc(idea.id) +
+            '" aria-label="' + esc(t('stageFor', words.label, MASTERY[level].label)) + '">' +
             masteryIcon(level, 20) + MASTERY[level].label + '</button></span>';
         }).join('') + '</div></section>';
-    }).join('') +
+    }).join('');
+    var more = state.quickShown >= ideas.length
+      ? '<p class="fine-print">' + esc(t('everyIdea')) + '</p>'
+      : '<button type="button" id="quick-more" class="btn-secondary" style="width:100%">' + esc(t('moreIdeas')) + '</button>';
+    return '' +
+'<main data-screen="quickstart" class="page">' + brandHtml(2) +
+'  <div><h1 class="setup-title">' + esc(t('quickTitle', name)) + '</h1>' +
+'  <p class="sub" style="margin-top:8px">' + esc(t('quickBody', name)) + '</p>' +
+'  <p class="ink-sage" style="font-weight:600;margin-top:10px;font-size:14px">' + esc(t('ideasFor', name)) + '</p></div>' +
+    sections + more +
 '  <p data-form-error hidden class="form-error"></p>' +
 '</main>' +
 '<div class="qs-bar"><div class="qs-bar-inner">' +
 '  <button type="button" id="quick-add" class="btn-primary" style="flex:1"' + (n ? '' : ' disabled') + '>' +
-      (n ? (n === 1 ? 'Add 1 entry' : 'Add ' + n + ' entries') : 'Add entries') + '</button>' +
-'  <button type="button" id="quick-skip" class="btn-secondary">Skip</button>' +
+      esc(n ? t('doneAdd', n) : t('done')) + '</button>' +
+'  <button type="button" id="quick-skip" class="btn-secondary">' + esc(t('skip')) + '</button>' +
 '</div></div>';
   }
 
@@ -694,11 +731,12 @@
       return '<button type="button" class="nav-item" data-page="' + page + '"' + (current ? ' aria-current="page"' : '') + '>' +
         icon(name, 26, { fill: current ? 'sage' : 'none' }) + '<span>' + esc(label) + '</span></button>';
     }
-    return '<nav class="bottom-nav" aria-label="Main navigation">' +
-      item('words', 'home', 'Home', p === 'words') +
-      item('log', 'log', 'Log', p === 'log' || p === 'entry') +
-      '<button type="button" id="add-first" class="nav-add" aria-label="Add a word, sound or sign">' + icon('plus', 26, { fill: 'none' }) + '</button>' +
-      item('insights', 'insights', 'Insights', p === 'insights') +
+    return '<nav class="bottom-nav" aria-label="' + esc(t('navLabel')) + '">' +
+      item('words', 'home', t('navHome'), p === 'words') +
+      item('log', 'log', t('navLog'), p === 'log' || p === 'entry') +
+      '<button type="button" id="add-first" class="nav-add" aria-label="' + esc(t('addEntryAria')) + '">'
+      + icon('plus', 26, { fill: 'none' }) + '</button>' +
+      item('insights', 'insights', t('navInsights'), p === 'insights') +
       item('profile', 'child', state.child.name, p === 'profile') +
       '</nav>';
   }
@@ -714,8 +752,8 @@
 
   function childLine() {
     var b = state.child.birthday;
-    return formatAge(ageMonths(b, todayIso()), state.child.name) + ' · born ' +
-      MONTH_NAMES[Number(b.slice(5, 7)) - 1] + ' ' + b.slice(0, 4);
+    return formatAge(ageMonths(b, todayIso()), state.child.name) + ' · ' +
+      t('bornOn', monthNames()[Number(b.slice(5, 7)) - 1], b.slice(0, 4));
   }
 
   // ── Home ─────────────────────────────────────────────────────────────
@@ -726,35 +764,34 @@
     return '' +
 '<header class="kid-head"><div class="kid-id"><div class="kid-avatar" aria-hidden="true">' + esc(name.charAt(0).toUpperCase()) + '</div>' +
 '  <div style="min-width:0"><h1 class="kid-name" tabindex="-1">' + esc(name) + '</h1><p class="kid-age">' + esc(childLine()) + '</p></div></div>' +
-'  <button type="button" class="round-btn" data-page="profile" aria-label="' + esc(name) + '’s profile and settings">' + icon('sliders', 24) + '</button>' +
+'  <button type="button" class="round-btn" data-page="profile" aria-label="' + esc(t('profileAria', name)) + '">' + icon('sliders', 24) + '</button>' +
 '</header>' +
-'<section class="hero-card" aria-label="Total words, sounds and signs"><div class="hero-blob"></div>' + heroCowSvg() +
-'  <div class="hero-text"><p class="hero-label">' + esc(name) + '’s words so far</p><strong class="hero-count">' + data.total + '</strong></div>' +
-'  <div class="hero-meta">' + (data.thisWeek ? '<span class="pill-sage">+' + data.thisWeek + ' this week</span>' : '') +
-      (langs.length ? '<span>across ' + esc(joinNames(langs)) + '</span>' : '<span>Every first counts</span>') + '</div>' +
+'<section class="hero-card" aria-label="' + esc(t('wordsSoFar', name)) + '"><div class="hero-blob"></div>' + heroCowSvg() +
+'  <div class="hero-text"><p class="hero-label">' + esc(t('wordsSoFar', name)) + '</p><strong class="hero-count">' + data.total + '</strong></div>' +
+'  <div class="hero-meta">' + (data.thisWeek ? '<span class="pill-sage">' + esc(t('thisWeek', data.thisWeek)) + '</span>' : '') +
+      (langs.length ? '<span>' + esc(t('across', joinNames(langs))) + '</span>' : '<span>' + esc(t('everyFirst')) + '</span>') + '</div>' +
 '</section>' +
-'<section class="kind-grid" aria-label="Categories">' +
+'<section class="kind-grid" aria-label="' + esc(t('categories')) + '">' +
       ['word', 'sound', 'sign'].map(function (kind) {
         var k = KINDS[kind];
         return '<button type="button" class="kind-card ' + TINT[k.tone] + '" data-kind-card="' + kind + '">' +
           icon(k.icon, 36, { fill: 'white' }) + '<span><strong class="kind-count">' + countKind(kind) + '</strong>' +
-          '<span class="kind-label ' + INK[k.tone] + '">' + k.many + '</span></span></button>';
+          '<span class="kind-label ' + INK[k.tone] + '">' + esc(k.many) + '</span></span></button>';
       }).join('') +
 '</section>' +
-'<section class="flex flex-col gap-3"><div class="section-heading"><h2>Recent</h2>' +
-      (state.entries.length ? '<button type="button" class="link-btn" data-page="log">See all</button>' : '') + '</div>' +
+'<section class="flex flex-col gap-3"><div class="section-heading"><h2>' + esc(t('recent')) + '</h2>' +
+      (state.entries.length ? '<button type="button" class="link-btn" data-page="log">' + esc(t('seeAll')) + '</button>' : '') + '</div>' +
       (state.entries.length
         ? '<ul class="entry-list">' + state.entries.slice().sort(byNewest).slice(0, 4).map(recentRowHtml).join('') + '</ul>'
-        : '<div class="state-empty">' + icon('word', 56) + '<p>' + esc(name) + '’s word story starts here.</p><p class="sub">Add the first word, sound or sign you have heard.</p><button type="button" class="btn-primary" data-add-kind="word">Add a word</button></div>') +
+        : '<div class="state-empty">' + icon('word', 56) + '<p>' + esc(t('emptyHome', name)) + '</p><p class="sub">' + esc(t('emptyHomeBody')) + '</p><button type="button" class="btn-primary" data-add-kind="word">' + esc(t('addAWord')) + '</button></div>') +
 '</section>';
   }
 
   function entryAria(e) {
-    return KINDS[e.kind].one + ': ' + e.label +
-      (e.sounds_like ? ', ' + e.sounds_like : '') +
-      (e.language_name ? ', ' + e.language_name : '') +
-      ', ' + MASTERY[masteryOf(e)].label + ', ' +
-      (e.already_learned ? 'already learned' : e.noticed_unknown ? 'date not remembered' : fmtLong(e.said_on));
+    var says = e.sounds_like ? (e.kind === 'sign' ? e.sounds_like : '“' + e.sounds_like + '”') : '';
+    return t('entryAria', KINDS[e.kind].one, e.label, says, e.language_name || '',
+      MASTERY[masteryOf(e)].label,
+      e.already_learned ? t('alreadyLearned') : e.noticed_unknown ? t('dateNotRemembered') : fmtLong(e.said_on));
   }
 
   function recentRowHtml(e) {
@@ -766,21 +803,21 @@
       '<span class="entry-main"><span class="entry-top"><span class="entry-word">' + esc(e.label) + '</span>' +
         '<span class="entry-kicker ' + INK[tone] + '">' + KINDS[e.kind].one + (e.language_name ? ' · ' + esc(e.language_name) : '') + '</span></span>' +
         (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + '</span>' +
-      '<span class="entry-side"><span class="' + (e.already_learned ? 'learned-badge">Already learned' : e.noticed_unknown ? 'learned-badge">No date' : 'entry-date">' + esc(fmtShort(e.said_on))) + '</span>' +
+      '<span class="entry-side"><span class="' + (e.already_learned ? 'learned-badge">' + esc(t('alreadyLearned')) : e.noticed_unknown ? 'learned-badge">' + esc(t('noDate')) : 'entry-date">' + esc(fmtShort(e.said_on))) + '</span>' +
         '<span class="' + M_PILL[level] + '">' + MASTERY[level].label + '</span></span>' +
       '</button></li>';
   }
 
   // ── Log ──────────────────────────────────────────────────────────────
   function filterLabel(f) {
-    if (f === 'all') return 'All';
+    if (f === 'all') return t('filterAll');
     if (KINDS[f]) return KINDS[f].many;
     if (MASTERY[f]) return MASTERY[f].label;
-    if (f === 'month') return 'This month';
+    if (f === 'month') return t('thisMonth');
     if (f.indexOf('lang:') === 0) {
       var key = f.slice(5);
       var hit = state.entries.find(function (e) { return (e.language_name || 'no language').toLowerCase() === key; });
-      return hit ? (hit.language_name || 'No language') : key;
+      return hit ? (hit.language_name || t('noLanguage')) : key;
     }
     return f;
   }
@@ -820,11 +857,11 @@
     filters.push('mastered');
     if (filters.indexOf(state.filter) === -1) filters.splice(1, 0, state.filter);
     return '' +
-'<header class="page-head"><div><p class="eyebrow">' + esc(state.child.name) + '’s log</p>' +
+'<header class="page-head"><div><p class="eyebrow">' + esc(t('logTitle', state.child.name)) + '</p>' +
 '  <h1 class="h-display" tabindex="-1" data-log-count>' + esc(logCount()) + '</h1></div>' + icon('book', 60) + '</header>' +
-'<div class="search-wrap"><label class="sr-only" for="word-search">Search words, sounds, signs and notes</label>' + icon('search', 24) +
-'  <input id="word-search" class="field" type="search" placeholder="Search words, signs, notes" value="' + esc(state.search) + '"></div>' +
-'<div class="chips-row" role="group" aria-label="Filter entries">' +
+'<div class="search-wrap"><label class="sr-only" for="word-search">' + esc(t('searchLabel')) + '</label>' + icon('search', 24) +
+'  <input id="word-search" class="field" type="search" placeholder="' + esc(t('searchPlaceholder')) + '" value="' + esc(state.search) + '"></div>' +
+'<div class="chips-row" role="group" aria-label="' + esc(t('filterLabel')) + '">' +
       filters.map(function (f) {
         var on = state.filter === f;
         return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-filter="' + esc(f) + '" aria-pressed="' + on + '">' + esc(filterLabel(f)) + '</button>';
@@ -836,16 +873,16 @@
   }
   function logCount() {
     var n = selectedConcepts().length;
-    if (state.filter === 'all' && !state.search.trim()) return n + (n === 1 ? ' entry' : ' entries');
-    return n + ' found';
+    if (state.filter === 'all' && !state.search.trim()) return t('entryCount', n);
+    return t('foundCount', n);
   }
   function listHtml() {
     var rows = selectedConcepts();
     if (!state.entries.length) {
-      return '<div class="state-empty">' + icon('book', 56) + '<p>No entries yet.</p><p class="sub">Every word, sound and sign you add shows up here, grouped by age.</p><button type="button" class="btn-primary" data-add-kind="word">Add an entry</button></div>';
+      return '<div class="state-empty">' + icon('book', 56) + '<p>' + esc(t('emptyLog')) + '</p><p class="sub">' + esc(t('emptyLogBody')) + '</p><button type="button" class="btn-primary" data-add-kind="word">' + esc(t('addAnEntry')) + '</button></div>';
     }
     if (!rows.length) {
-      return '<div class="state-empty">' + icon('search', 48) + '<p>Nothing matches yet.</p><p class="sub">Try another search or filter, or add something new.</p><button type="button" class="btn-secondary" data-add-kind="' + (KINDS[state.filter] ? state.filter : 'word') + '">Add an entry</button></div>';
+      return '<div class="state-empty">' + icon('search', 48) + '<p>' + esc(t('noMatch')) + '</p><p class="sub">' + esc(t('noMatchBody')) + '</p><button type="button" class="btn-secondary" data-add-kind="' + (KINDS[state.filter] ? state.filter : 'word') + '">' + esc(t('addAnEntry')) + '</button></div>';
     }
     // The log is grouped by the age at which the word's first language was
     // noticed; each language under it keeps its own date.
@@ -866,12 +903,12 @@
       var group = groups.get(age);
       var first = group[0].first_on;
       return '<section class="age-group"><div class="age-heading"><h2>' + esc(formatAge(age, state.child.name)) + '</h2>' +
-        '<span>' + esc(MONTH_NAMES[Number(first.slice(5, 7)) - 1] + ' ' + first.slice(0, 4)) + ' · ' + group.length + (group.length === 1 ? ' entry' : ' entries') + '</span></div>' +
+        '<span>' + esc(monthNames()[Number(first.slice(5, 7)) - 1] + ' ' + first.slice(0, 4)) + ' · ' + esc(t('entryCount', group.length)) + '</span></div>' +
         '<ul class="entry-list">' + group.map(logRowHtml).join('') + '</ul></section>';
     }).join('');
     if (learned.length) {
-      html += '<section class="age-group"><div class="age-heading"><h2>Already learned</h2>' +
-        '<span>' + learned.length + (learned.length === 1 ? ' entry' : ' entries') + '</span></div>' +
+      html += '<section class="age-group"><div class="age-heading"><h2>' + esc(t('alreadyLearned')) + '</h2>' +
+        '<span>' + esc(t('entryCount', learned.length)) + '</span></div>' +
         '<ul class="entry-list">' + learned.map(logRowHtml).join('') + '</ul></section>';
     }
     if (undated.length) {
@@ -898,8 +935,8 @@
         }).join('') + '</span>'
       : '';
     var aria = entryAria(e) + others.map(function (o) {
-      return ', also ' + o.label + (o.kind !== e.kind ? ' as a ' + KINDS[o.kind].one.toLowerCase() : '') +
-        (o.language_name ? ' in ' + o.language_name : '') +
+      return ', ' + o.label + (o.kind !== e.kind ? ', ' + KINDS[o.kind].one.toLowerCase() : '') +
+        (o.language_name ? ', ' + o.language_name : '') +
         ', ' + MASTERY[masteryOf(o)].label;
     }).join('');
     return '<li><button type="button" class="entry-row' + (others.length ? ' concept-row' : '') +
@@ -907,7 +944,7 @@
       masteryIcon(masteryOf(e), 26) +
       '<span class="entry-main"><span class="entry-top"><span class="entry-word" style="font-size:17px">' + esc(e.label) + '</span>' +
         '<span class="lang-chip ' + TINT[tone] + ' ' + INK[tone] + '">' + esc(e.language_name || KINDS[e.kind].one) + '</span>' +
-        (e.is_demo ? '<span class="lang-chip tint-sage ink-sage">Staging demo</span>' : '') + '</span>' +
+        (e.is_demo ? '<span class="lang-chip tint-sage ink-sage">' + esc(t('stagingDemo')) + '</span>' : '') + '</span>' +
         (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + also + '</span>' +
       (g.already_learned || g.undated ? '' : '<span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span>') + '</button></li>';
   }
@@ -921,8 +958,8 @@
   function entryHtml() {
     var e = state.entries.find(function (x) { return x.id === state.entryId; });
     if (!e) {
-      return '<header class="page-head"><button type="button" class="round-btn" data-page="log" aria-label="Back to the log">' + icon('back', 22) + '</button></header>' +
-        '<div class="state-empty">' + icon('search', 48) + '<h1 class="font-display" style="font-size:20px;font-weight:600" tabindex="-1">This entry isn’t here any more.</h1><p class="sub">It may have been deleted.</p><button type="button" class="btn-secondary" data-page="log">Back to the log</button></div>';
+      return '<header class="page-head"><button type="button" class="round-btn" data-page="log" aria-label="' + esc(t('backToLog')) + '">' + icon('back', 22) + '</button></header>' +
+        '<div class="state-empty">' + icon('search', 48) + '<h1 class="font-display" style="font-size:20px;font-weight:600" tabindex="-1">' + esc(t('goneTitle')) + '</h1><p class="sub">' + esc(t('goneBody')) + '</p><button type="button" class="btn-secondary" data-page="log">' + esc(t('backToLog')) + '</button></div>';
     }
     var g = entryConcept(e);
     // A deep link to a non-title language opens the same concept page, with
@@ -933,47 +970,47 @@
     var tone = e.language_name ? langTone(e.language_name) : KINDS[e.kind].tone;
     var level = masteryOf(e);
     var says = e.sounds_like
-      ? (e.kind === 'sign' ? esc(name) + ' signs it: ' + esc(e.sounds_like) : esc(name) + ' says <i>“' + esc(e.sounds_like) + '”</i>')
-      : e.already_learned ? 'Already learned'
-      : e.noticed_unknown ? 'Date not remembered' : 'Noticed ' + esc(fmtLong(e.said_on));
+      ? (e.kind === 'sign' ? t('signsIt', esc(name), esc(e.sounds_like)) : t('saysHow', esc(name), esc(e.sounds_like)))
+      : e.already_learned ? esc(t('alreadyLearned'))
+      : e.noticed_unknown ? esc(t('dateNotRemembered')) : esc(t('noticedOn', fmtLong(e.said_on)));
     var history = Array.isArray(e.mastery_history) && e.mastery_history.length
       ? e.mastery_history.slice() : [{ level: level, on: e.said_on }];
     var age = formatAge(ageMonths(state.child.birthday, e.said_on), name);
     return '' +
-'<header class="page-head" style="align-items:center"><button type="button" class="round-btn" data-page="log" aria-label="Back to the log">' + icon('back', 22) + '</button>' +
-'  <button type="button" class="pill-btn" data-edit-entry="' + e.id + '">' + icon('edit', 22) + 'Edit</button></header>' +
+'<header class="page-head" style="align-items:center"><button type="button" class="round-btn" data-page="log" aria-label="' + esc(t('backToLog')) + '">' + icon('back', 22) + '</button>' +
+'  <button type="button" class="pill-btn" data-edit-entry="' + e.id + '">' + icon('edit', 22) + esc(t('edit')) + '</button></header>' +
 '<section class="detail-hero ' + TINT[tone] + '">' + icon(entryIconName(e), 92, { fill: 'white', cls: 'ico-hero' }) +
-'  <span class="detail-kicker ' + INK[tone] + '">' + KINDS[e.kind].one + (e.language_name ? ' · ' + esc(e.language_name) : '') + '</span>' +
+'  <span class="detail-kicker ' + INK[tone] + '">' + esc(KINDS[e.kind].one) + (e.language_name ? ' · ' + esc(e.language_name) : '') + '</span>' +
 '  <h1 class="detail-word" tabindex="-1">' + esc(e.label) + '</h1>' +
 '  <p class="detail-says ' + INK[tone] + '">' + says + '</p>' +
 '</section>' +
 '<dl class="info-card">' +
-'  <div class="info-row"><dt>First noticed</dt><dd>' +
-        (e.already_learned ? '<span class="learned-badge">Already learned</span>'
-          : e.noticed_unknown ? 'Date not remembered' : esc(fmtFull(e.said_on)) + ' · ' + esc(age)) + '</dd></div>' +
-'  <div class="info-row"><dt>Mastery</dt><dd>' + icon(MASTERY[level].icon, 26) + MASTERY[level].label + '</dd></div>' +
-      (e.note ? '<div class="info-block"><dt>Notes</dt><dd>' + esc(e.note) + '</dd></div>' : '') +
-      (e.is_demo ? '<div class="info-row"><dt>Source</dt><dd>Staging demo</dd></div>' : '') +
+'  <div class="info-row"><dt>' + esc(t('firstNoticed')) + '</dt><dd>' +
+        (e.already_learned ? '<span class="learned-badge">' + esc(t('alreadyLearned')) + '</span>'
+          : e.noticed_unknown ? esc(t('dateNotRemembered')) : esc(fmtFull(e.said_on)) + ' · ' + esc(age)) + '</dd></div>' +
+'  <div class="info-row"><dt>' + esc(t('mastery')) + '</dt><dd>' + icon(MASTERY[level].icon, 26) + esc(MASTERY[level].label) + '</dd></div>' +
+      (e.note ? '<div class="info-block"><dt>' + esc(t('notes')) + '</dt><dd>' + esc(e.note) + '</dd></div>' : '') +
+      (e.is_demo ? '<div class="info-row"><dt>' + esc(t('source')) + '</dt><dd>' + esc(t('stagingDemo')) + '</dd></div>' : '') +
 '</dl>' +
-'<section class="journey"><h2>' + esc(name) + '’s journey with this ' + (e.kind === 'sign' ? 'sign' : e.kind === 'sound' ? 'sound' : 'word') + '</h2>' +
+'<section class="journey"><h2>' + esc(t('journeyTitle', name, e.kind)) + '</h2>' +
       history.slice().reverse().map(function (step, i) {
         var m = MASTERY[step.level] || MASTERY.emerging;
         // The journey's first step of an already-learned entry has no day:
         // later stage changes keep their real dates.
         var when = i === history.length - 1 && e.already_learned
-          ? 'Already learned' : i === history.length - 1 && e.noticed_unknown
-          ? 'Date not remembered' : fmtShort(step.on);
-        return '<div class="journey-step">' + icon(m.icon, 34) + '<div><b>' + m.label + '</b> <span>· ' + esc(when) + '</span></div></div>';
+          ? t('alreadyLearned') : i === history.length - 1 && e.noticed_unknown
+          ? t('dateNotRemembered') : fmtShort(step.on);
+        return '<div class="journey-step">' + icon(m.icon, 34) + '<div><b>' + esc(m.label) + '</b> <span>· ' + esc(when) + '</span></div></div>';
       }).join('') +
 '</section>' +
       (others.length
         ? '<div class="section-heading" style="padding:0 4px"><h2 class="font-display" style="font-size:20px;font-weight:600">' +
-          (others.some(function (o) { return o.kind !== e.kind; }) ? 'Linked entries' : 'In other languages') + '</h2></div>' +
+          esc(others.some(function (o) { return o.kind !== e.kind; }) ? 'Linked entries' : t('inOtherLanguages')) + '</h2></div>' +
           others.map(function (o) { return langBlockHtml(o, name, e.kind); }).join('')
         : '') +
-'<button type="button" class="btn-secondary" data-add-language="' + e.id + '">' + icon('plus', 22, { fill: 'none' }) + 'Add another language</button>' +
+'<button type="button" class="btn-secondary" data-add-language="' + e.id + '">' + icon('plus', 22, { fill: 'none' }) + esc(t('addAnotherLanguage')) + '</button>' +
 '<button type="button" class="btn-danger" data-delete-entry="' + e.id + '">' + icon('trash', 22) +
-      (others.length ? 'Delete ' + esc(e.label) : 'Delete entry') + '</button>';
+      (others.length ? esc(t('deleteLabel', e.label)) : esc(t('deleteEntry'))) + '</button>';
   }
   // One other entry on the card: its own word, says, dates, mastery,
   // journey, Edit and Delete. A different kind's chip names that kind.
@@ -981,43 +1018,42 @@
     var otone = o.language_name ? langTone(o.language_name) : KINDS[o.kind].tone;
     var olevel = masteryOf(o);
     var osays = o.sounds_like
-      ? (o.kind === 'sign' ? esc(name) + ' signs it: ' + esc(o.sounds_like) : esc(name) + ' says <i>“' + esc(o.sounds_like) + '”</i>')
-      : o.noticed_unknown ? 'Date not remembered' : 'Noticed ' + esc(fmtLong(o.said_on));
+      ? (o.kind === 'sign' ? t('signsIt', esc(name), esc(o.sounds_like)) : t('saysHow', esc(name), esc(o.sounds_like)))
+      : o.noticed_unknown ? esc(t('dateNotRemembered')) : esc(t('noticedOn', fmtLong(o.said_on)));
     var ohistory = Array.isArray(o.mastery_history) && o.mastery_history.length
       ? o.mastery_history.slice() : [{ level: olevel, on: o.said_on }];
     return '<section class="lang-block">' +
       '<div class="lang-block-top"><span class="lang-chip ' + TINT[otone] + ' ' + INK[otone] + '">' +
         esc(chipText(o, baseKind)) + '</span>' +
-        '<button type="button" class="pill-btn" data-edit-entry="' + o.id + '">' + icon('edit', 20) + 'Edit</button></div>' +
+        '<button type="button" class="pill-btn" data-edit-entry="' + o.id + '">' + icon('edit', 20) + esc(t('edit')) + '</button></div>' +
       '<h3 class="lang-block-word">' + esc(o.label) + '</h3>' +
       '<p class="sub">' + osays + '</p>' +
       '<dl class="flex flex-col">' +
-        '<div class="info-row"><dt>First noticed</dt><dd>' +
-          (o.noticed_unknown ? 'Date not remembered' : esc(fmtFull(o.said_on)) + ' · ' +
+        '<div class="info-row"><dt>' + esc(t('firstNoticed')) + '</dt><dd>' +
+          (o.noticed_unknown ? esc(t('dateNotRemembered')) : esc(fmtFull(o.said_on)) + ' · ' +
           esc(formatAge(ageMonths(state.child.birthday, o.said_on), name))) + '</dd></div>' +
-        '<div class="info-row"><dt>Mastery</dt><dd>' + icon(MASTERY[olevel].icon, 26) + MASTERY[olevel].label + '</dd></div>' +
+        '<div class="info-row"><dt>' + esc(t('mastery')) + '</dt><dd>' + icon(MASTERY[olevel].icon, 26) + esc(MASTERY[olevel].label) + '</dd></div>' +
       '</dl>' +
       ohistory.slice().reverse().map(function (step, i) {
         var m = MASTERY[step.level] || MASTERY.emerging;
-        var when = i === ohistory.length - 1 && o.noticed_unknown ? 'Date not remembered' : fmtShort(step.on);
-        return '<div class="journey-step">' + icon(m.icon, 30) + '<div><b>' + m.label + '</b> <span>· ' + esc(when) + '</span></div></div>';
+        var when = i === ohistory.length - 1 && o.noticed_unknown ? t('dateNotRemembered') : fmtShort(step.on);
+        return '<div class="journey-step">' + icon(m.icon, 30) + '<div><b>' + esc(m.label) + '</b> <span>· ' + esc(when) + '</span></div></div>';
       }).join('') +
-      '<button type="button" class="btn-danger" data-delete-entry="' + o.id + '">' + icon('trash', 22) + 'Delete ' + esc(o.label) + '</button>' +
+      '<button type="button" class="btn-danger" data-delete-entry="' + o.id + '">' + icon('trash', 22) + esc(t('deleteLabel', o.label)) + '</button>' +
       '</section>';
   }
 
   // ── Insights ─────────────────────────────────────────────────────────
-  var SUGGESTIONS = [
-    { tag: 'Words · bath time', title: 'Name what floats', icon: 'duck', tone: 'blush', kind: 'word',
-      body: function (n) { return 'Name each toy as it bobs up, in every language you speak at home. Pause and let ' + n + ' try first.'; },
-      detail: 'Hold up one toy at a time and name it slowly, then wait. Repeat whatever comes back as if it was perfect, then say the whole word once more. Try the same toy in each of your languages on different days.' },
-    { tag: 'Signs · snack time', title: 'Sign and say together', icon: 'wave', tone: 'butter', kind: 'sign',
-      body: function () { return 'Pair “more” and “all done” with the spoken words so both stick.'; },
-      detail: 'Make the sign and say the word at the same moment, every time the moment comes up. There is no need to ask for the sign back. Respond warmly to any way your child lets you know.' },
-    { tag: 'Sounds · anytime', title: 'Leave a gap in the song', icon: 'music', tone: 'sky', kind: 'sound',
-      body: function (n) { return 'Sing a favorite and stop before the last word or animal sound. Wait, ' + n + ' may fill it in.'; },
-      detail: 'Pick a song with animals or a repeating line. After a few rounds, pause before the last sound and look expectant. A moo, a clap or a giggle all count as taking a turn.' },
-  ];
+  function suggestions() {
+    return [
+      { tag: t('playTag1'), title: t('playTitle1'), icon: 'duck', tone: 'blush', kind: 'word',
+        body: function (n) { return t('playBody1', n); }, detail: t('playDetail1') },
+      { tag: t('playTag2'), title: t('playTitle2'), icon: 'wave', tone: 'butter', kind: 'sign',
+        body: function () { return t('playBody2'); }, detail: t('playDetail2') },
+      { tag: t('playTag3'), title: t('playTitle3'), icon: 'music', tone: 'sky', kind: 'sound',
+        body: function (n) { return t('playBody3', n); }, detail: t('playDetail3') },
+    ];
+  }
   function insightsHtml() {
     var name = state.child.name;
     var data = window.RiloInsights.summarize(state.entries, todayIso());
@@ -1025,34 +1061,35 @@
     var shown = byWeek ? data.weeks : data.growth.slice(-7);
     var current = shown[shown.length - 1];
     var max = Math.max(1, data.total);
-    var monthName = byWeek ? '' : MONTH_NAMES[Number(current.key.slice(5)) - 1];
+    var months = monthNames();
+    var monthName = byWeek ? '' : months[Number(current.key.slice(5)) - 1];
     // Week labels and table cells use the week's Monday.
     function wDate(w) { return new Date(w.start + 'T00:00:00Z'); }
     function wCell(w) {
       var d = wDate(w);
-      return d.getUTCDate() + ' ' + MONTH_NAMES[d.getUTCMonth()].slice(0, 3) + ' ' + w.start.slice(0, 4);
+      return d.getUTCDate() + ' ' + months[d.getUTCMonth()].slice(0, 3) + ' ' + w.start.slice(0, 4);
     }
     var chartDesc = byWeek
-      ? 'Words, sounds and signs in total by week: ' + shown.map(function (w) {
+      ? t('chartWeek', shown.map(function (w) {
           var d = wDate(w);
-          return 'week of ' + d.getUTCDate() + ' ' + MONTH_NAMES[d.getUTCMonth()] + ' ' + w.total;
-        }).join(', ')
-      : 'Words, sounds and signs in total by month: ' + shown.map(function (m) {
-          return MONTH_NAMES[Number(m.key.slice(5)) - 1] + ' ' + m.total;
-        }).join(', ');
-    var langTotal = data.byLanguage.reduce(function (s, l) { return s + l.count; }, 0) || 1;
+          return t('weekOf', d.getUTCDate(), months[d.getUTCMonth()]) + ' ' + w.total;
+        }).join(', '))
+      : t('chartMonth', shown.map(function (m) {
+          return months[Number(m.key.slice(5)) - 1] + ' ' + m.total;
+        }).join(', '));
+    var langTotal = data.byLanguage.reduce(function (s2, l) { return s2 + l.count; }, 0) || 1;
     // The month the family started using Rilo, if they onboarded with
     // quick-start picks: a note under the chart explains the empty start.
     var baselineMonth = data.growth.find(function (m) { return m.baseline > 0; });
     return '' +
 '<header class="page-head"><div><p class="eyebrow">' + esc(name) + ' · ' + esc(formatAge(ageMonths(state.child.birthday, todayIso()), name)) + '</p>' +
-'  <h1 class="h-display" tabindex="-1">Insights</h1></div>' + icon('sparkle', 56) + '</header>' +
-'<section class="growth-card" aria-labelledby="growth-h"><div class="growth-top"><div><h2 id="growth-h" class="card-label">Word growth</h2>' +
-'  <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px;flex-wrap:wrap"><span class="growth-big">+' + current.added + '</span><span class="sub" style="font-size:14px">' + (byWeek ? 'new this week' : 'new in ' + monthName) + '</span></div></div>' +
-'  <span class="pill-sage" style="font-size:12px">Total ' + data.total + '</span></div>' +
-'  <div class="seg2" role="radiogroup" aria-label="Show growth by">' +
-    '<button type="button" role="radio" data-growth-view="week" aria-checked="' + byWeek + '"' + (byWeek ? ' class="on"' : '') + '>Week</button>' +
-    '<button type="button" role="radio" data-growth-view="month" aria-checked="' + !byWeek + '"' + (byWeek ? '' : ' class="on"') + '>Month</button>' +
+'  <h1 class="h-display" tabindex="-1">' + esc(t('insights')) + '</h1></div>' + icon('sparkle', 56) + '</header>' +
+'<section class="growth-card" aria-labelledby="growth-h"><div class="growth-top"><div><h2 id="growth-h" class="card-label">' + esc(t('wordGrowth')) + '</h2>' +
+'  <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px;flex-wrap:wrap"><span class="growth-big">+' + current.added + '</span><span class="sub" style="font-size:14px">' + esc(byWeek ? t('newThisWeek') : t('newIn', monthName)) + '</span></div></div>' +
+'  <span class="pill-sage" style="font-size:12px">' + esc(t('total', data.total)) + '</span></div>' +
+'  <div class="seg2" role="radiogroup" aria-label="' + esc(t('showGrowthBy')) + '">' +
+    '<button type="button" role="radio" data-growth-view="week" aria-checked="' + byWeek + '"' + (byWeek ? ' class="on"' : '') + '>' + esc(t('week')) + '</button>' +
+    '<button type="button" role="radio" data-growth-view="month" aria-checked="' + !byWeek + '"' + (byWeek ? '' : ' class="on"') + '>' + esc(t('month')) + '</button>' +
 '  </div>' +
 '  <div class="growth-chart" role="img" aria-label="' + esc(chartDesc) + '">' +
       shown.map(function (m, i) {
@@ -1061,25 +1098,23 @@
           '<div class="bar' + (now ? ' bar-now' : '') + '" style="height:' + Math.max(4, Math.round(m.total / max * 130)) + 'px"></div></div>';
       }).join('') +
 '  </div><div class="bar-labels" aria-hidden="true">' + shown.map(function (m) {
-        if (!byWeek) return '<span>' + MONTH_NAMES[Number(m.key.slice(5)) - 1].slice(0, 3) + '</span>';
+        if (!byWeek) return '<span>' + months[Number(m.key.slice(5)) - 1].slice(0, 3) + '</span>';
         var d = wDate(m);
-        return '<span>' + d.getUTCDate() + '<br>' + MONTH_NAMES[d.getUTCMonth()].slice(0, 3) + '</span>';
+        return '<span>' + d.getUTCDate() + '<br>' + months[d.getUTCMonth()].slice(0, 3) + '</span>';
       }).join('') + '</div>' +
-      (baselineMonth ? '<p class="fine-print">Started with ' + baselineMonth.baseline + ' already learned in ' +
-        MONTH_NAMES[Number(baselineMonth.key.slice(5)) - 1] + '.</p>' : '') +
-      (data.undated ? '<p class="fine-print">' + data.undated + ' with no date ' +
-        (data.undated === 1 ? 'counts' : 'count') + ' in the total, not in the chart.</p>' : '') +
+      (baselineMonth ? '<p class="fine-print">' + esc(t('startedWith', baselineMonth.baseline, months[Number(baselineMonth.key.slice(5)) - 1])) + '</p>' : '') +
+      (data.undated ? '<p class="fine-print">' + esc(t('undatedNote', data.undated)) + '</p>' : '') +
       (byWeek
-        ? '<details class="chart-table"><summary>Week by week</summary><table><thead><tr><th>Week of</th><th>New</th><th>Total</th></tr></thead><tbody>' +
+        ? '<details class="chart-table"><summary>' + esc(t('weekByWeek')) + '</summary><table><thead><tr><th>' + esc(t('weekOfHead')) + '</th><th>' + esc(t('newHead')) + '</th><th>' + esc(t('totalHead')) + '</th></tr></thead><tbody>' +
           data.weeks.slice().reverse().map(function (w) {
             return '<tr><td>' + wCell(w) + '</td><td>' + w.added + '</td><td>' + w.total + '</td></tr>';
           }).join('') + '</tbody></table></details>'
-        : '<details class="chart-table"><summary>Month by month' + (data.growth.length > 7 ? ' · full history' : '') + '</summary><table><thead><tr><th>Month</th><th>New</th><th>Total</th></tr></thead><tbody>' +
+        : '<details class="chart-table"><summary>' + esc(t('monthByMonth') + (data.growth.length > 7 ? t('fullHistory') : '')) + '</summary><table><thead><tr><th>' + esc(t('monthHead')) + '</th><th>' + esc(t('newHead')) + '</th><th>' + esc(t('totalHead')) + '</th></tr></thead><tbody>' +
           data.growth.slice().reverse().map(function (m) {
-            return '<tr><td>' + MONTH_NAMES[Number(m.key.slice(5)) - 1] + ' ' + m.key.slice(0, 4) + '</td><td>' + m.added + '</td><td>' + m.total + '</td></tr>';
+            return '<tr><td>' + months[Number(m.key.slice(5)) - 1] + ' ' + m.key.slice(0, 4) + '</td><td>' + m.added + '</td><td>' + m.total + '</td></tr>';
           }).join('') + '</tbody></table></details>') +
 '</section>' +
-'<section class="lang-card" aria-labelledby="lang-h"><h2 id="lang-h" class="card-label">By language</h2>' +
+'<section class="lang-card" aria-labelledby="lang-h"><h2 id="lang-h" class="card-label">' + esc(t('byLanguage')) + '</h2>' +
       (data.byLanguage.length
         ? '<div class="lang-stack" role="img" aria-label="' + esc(data.byLanguage.map(function (l) { return l.name + ' ' + l.count; }).join(', ')) + '">' +
             data.byLanguage.map(function (l) { return '<span class="' + SWATCH[l.assigned ? langTone(l.name) : 'sage'] + '" style="flex:' + l.count + '"></span>'; }).join('') + '</div>' +
@@ -1088,71 +1123,72 @@
               '<span class="swatch ' + SWATCH[l.assigned ? langTone(l.name) : 'sage'] + '"></span><span class="lang-name">' + esc(l.name) + '</span>' +
               '<span class="lang-pct">' + Math.round(l.count / langTotal * 100) + '%</span><span class="lang-num">' + l.count + '</span></button>';
           }).join('') + '</div>' +
-          '<p class="note-box">A word that ' + esc(name) + ' says in two languages counts once in each, like <b>water</b> and <b>agua</b>.</p>'
-        : '<p class="sub">Languages show here once entries have one.</p>') +
+          '<p class="note-box">' + t('byLanguageNote', esc(name)) + '</p>'
+        : '<p class="sub">' + esc(t('byLanguageEmpty')) + '</p>') +
 '</section>' +
-'<section class="flex flex-col gap-3" aria-labelledby="mastery-h"><h2 id="mastery-h" class="card-label" style="padding:0 4px">Mastery</h2>' +
+'<section class="flex flex-col gap-3" aria-labelledby="mastery-h"><h2 id="mastery-h" class="card-label" style="padding:0 4px">' + esc(t('mastery')) + '</h2>' +
 '  <div class="mastery-grid">' + ['mastered', 'practicing', 'emerging'].map(function (l) {
         return '<button type="button" class="m-tile" data-filter-to="' + l + '">' + icon(MASTERY[l].icon, 34) +
-          '<span class="m-count">' + data.mastery[l] + '</span><span class="m-name">' + MASTERY[l].label + '</span></button>';
+          '<span class="m-count">' + data.mastery[l] + '</span><span class="m-name">' + esc(MASTERY[l].label) + '</span></button>';
       }).join('') + '</div></section>' +
-'<section class="lang-card" aria-labelledby="across-h"><h2 id="across-h" class="card-label">Across languages</h2>' +
+'<section class="lang-card" aria-labelledby="across-h"><h2 id="across-h" class="card-label">' + esc(t('acrossLanguages')) + '</h2>' +
       (data.acrossLanguages.length
         ? data.acrossLanguages.map(function (c) {
             return '<div class="across-item"><span class="across-word font-display">' + esc(c.title) + '</span>' +
               c.languages.map(function (l) {
                 var tone = l.language_name ? langTone(l.language_name) : 'sage';
                 return '<div class="across-lang"><span class="swatch ' + SWATCH[tone] + '"></span>' +
-                  '<span class="across-name">' + esc(l.language_name || 'No language') + '</span>' +
+                  '<span class="across-name">' + esc(l.language_name || t('noLanguage')) + '</span>' +
                   '<span class="across-label">' + esc(l.label +
                     (c.kinds.length > 1 ? ' · ' + KINDS[l.kind].one : '')) + '</span>' +
-                  '<span class="across-stage">' + icon(MASTERY[l.mastery].icon, 20) + MASTERY[l.mastery].label + '</span></div>';
+                  '<span class="across-stage">' + icon(MASTERY[l.mastery].icon, 20) + esc(MASTERY[l.mastery].label) + '</span></div>';
               }).join('') + '</div>';
           }).join('') +
-          '<p class="note-box">Each of these counts once in ' + esc(name) + '’s total. Mastery counts each language on its own.</p>'
-        : '<p class="sub">When ' + esc(name) + ' has a word in more than one language, link them on one entry and it shows here.</p>') +
+          '<p class="note-box">' + t('acrossNote', esc(name)) + '</p>'
+        : '<p class="sub">' + esc(t('acrossEmpty', name)) + '</p>') +
 '</section>' +
-'<section class="flex flex-col gap-3" aria-labelledby="play-h"><h2 id="play-h" class="font-display" style="font-size:20px;font-weight:600;padding:4px 4px 0">Play ideas for this week</h2>' +
-      SUGGESTIONS.map(function (s, i) {
-        return '<button type="button" class="play-card" data-suggestion="' + i + '"><span class="play-icon ' + TINT[s.tone] + '">' + icon(s.icon, 40, { fill: 'white' }) + '</span>' +
-          '<span><span class="play-tag ' + INK[s.tone] + '">' + s.tag + '</span><span class="play-title" style="display:block">' + s.title + '</span>' +
-          '<span class="play-body" style="display:block">' + esc(s.body(name)) + '</span></span></button>';
+'<section class="flex flex-col gap-3" aria-labelledby="play-h"><h2 id="play-h" class="font-display" style="font-size:20px;font-weight:600;padding:4px 4px 0">' + esc(t('playIdeas')) + '</h2>' +
+      suggestions().map(function (s2, i) {
+        return '<button type="button" class="play-card" data-suggestion="' + i + '"><span class="play-icon ' + TINT[s2.tone] + '">' + icon(s2.icon, 40, { fill: 'white' }) + '</span>' +
+          '<span><span class="play-tag ' + INK[s2.tone] + '">' + esc(s2.tag) + '</span><span class="play-title" style="display:block">' + esc(s2.title) + '</span>' +
+          '<span class="play-body" style="display:block">' + esc(s2.body(name)) + '</span></span></button>';
       }).join('') +
-'  <p class="fine-print">Every child finds words at their own pace. These are ideas, not targets.</p>' +
+'  <p class="fine-print">' + esc(t('playPace')) + '</p>' +
 '</section>';
   }
 
   function openSuggestion(value) {
-    var s = SUGGESTIONS[Number(value)];
+    var s2 = suggestions()[Number(value)];
     var content = document.createElement('div');
     content.innerHTML = '' +
-      '<div class="sheet-head"><span style="width:44px"></span><h2 class="sheet-title">Play idea</h2><span style="width:44px"></span></div>' +
-      '<div class="flex flex-col gap-3"><span class="play-icon ' + TINT[s.tone] + '">' + icon(s.icon, 40, { fill: 'white' }) + '</span>' +
-      '<span class="play-tag ' + INK[s.tone] + '">' + s.tag + '</span>' +
-      '<h3 class="font-display" style="font-size:24px;font-weight:600">' + s.title + '</h3>' +
-      '<p class="sub">' + esc(s.detail) + '</p>' +
-      '<button type="button" class="btn-secondary" data-play-add>Log a ' + s.kind + '</button>' +
-      '<button type="button" class="btn-primary" data-close-play>Done</button></div>';
+      '<div class="sheet-head"><span style="width:44px"></span><h2 class="sheet-title">' + esc(t('playIdea')) + '</h2><span style="width:44px"></span></div>' +
+      '<div class="flex flex-col gap-3"><span class="play-icon ' + TINT[s2.tone] + '">' + icon(s2.icon, 40, { fill: 'white' }) + '</span>' +
+      '<span class="play-tag ' + INK[s2.tone] + '">' + esc(s2.tag) + '</span>' +
+      '<h3 class="font-display" style="font-size:24px;font-weight:600">' + esc(s2.title) + '</h3>' +
+      '<p class="sub">' + esc(s2.detail) + '</p>' +
+      '<button type="button" class="btn-secondary" data-play-add>' + esc(t('logA', KINDS[s2.kind].one.toLowerCase())) + '</button>' +
+      '<button type="button" class="btn-primary" data-close-play>' + esc(t('done')) + '</button></div>';
     var sheet = presentSheet(content);
     content.querySelector('[data-close-play]').addEventListener('click', function () { sheet.dismiss(); });
-    content.querySelector('[data-play-add]').addEventListener('click', function () { sheet.dismiss(); openEntrySheet(null, s.kind); });
+    content.querySelector('[data-play-add]').addEventListener('click', function () { sheet.dismiss(); openEntrySheet(null, s2.kind); });
   }
 
   // ── Profile ──────────────────────────────────────────────────────────
   function profileHtml() {
     var name = state.child.name;
     var langs = languagesUsed();
+    var b = state.child.birthday;
     return '' +
-'<header class="page-head"><div><p class="eyebrow">Profile</p><h1 class="h-display" tabindex="-1">A little about ' + esc(name) + '</h1></div></header>' +
+'<header class="page-head"><div><p class="eyebrow">' + esc(t('profile')) + '</p><h1 class="h-display" tabindex="-1">' + esc(t('aboutName', name)) + '</h1></div></header>' +
 '<section class="profile-card">' + icon('cow', 84) + '<h2>' + esc(name) + '</h2>' +
-'  <p>' + esc(formatAge(ageMonths(state.child.birthday, todayIso()), name)) + ' today</p>' +
-'  <p>Born ' + esc(MONTH_NAMES[Number(state.child.birthday.slice(5, 7)) - 1]) + ' ' + esc(state.child.birthday.slice(0, 4)) + '</p>' +
-'  <button type="button" id="edit-child" class="btn-primary">Edit child profile</button></section>' +
-'<section class="profile-about"><h2>' + esc(name) + '’s language story</h2>' +
-'  <p>' + state.entries.length + (state.entries.length === 1 ? ' entry' : ' entries') + ' · ' + langs.length + (langs.length === 1 ? ' language' : ' languages') + '</p>' +
-      (langs.length ? '<div class="chips-row">' + langs.map(function (l) { var t = langTone(l); return '<span class="lang-chip ' + TINT[t] + ' ' + INK[t] + '" style="font-size:13px;padding:6px 12px">' + esc(l) + '</span>'; }).join('') + '</div>' : '') +
-'  <p>Words, sounds and signs are tracked side by side. Mastery is yours to set: emerging, practicing or mastered.</p>' +
-'  <button type="button" class="btn-secondary" data-page="insights">See insights</button></section>';
+'  <p>' + esc(t('ageToday', formatAge(ageMonths(b, todayIso()), name))) + '</p>' +
+'  <p>' + esc(t('born', monthNames()[Number(b.slice(5, 7)) - 1], b.slice(0, 4))) + '</p>' +
+'  <button type="button" id="edit-child" class="btn-primary">' + esc(t('editChildProfile')) + '</button></section>' +
+'<section class="profile-about"><h2>' + esc(t('languageStory', name)) + '</h2>' +
+'  <p>' + esc(t('storyCount', state.entries.length, langs.length)) + '</p>' +
+      (langs.length ? '<div class="chips-row">' + langs.map(function (l) { var tn = langTone(l); return '<span class="lang-chip ' + TINT[tn] + ' ' + INK[tn] + '" style="font-size:13px;padding:6px 12px">' + esc(l) + '</span>'; }).join('') + '</div>' : '') +
+'  <p>' + esc(t('storyBody')) + '</p>' +
+'  <button type="button" class="btn-secondary" data-page="insights">' + esc(t('seeInsights')) + '</button></section>';
   }
 
   // ── Events on the rendered screen ─────────────────────────────────────
@@ -1233,6 +1269,14 @@
 
     var quickAdd = app.querySelector('#quick-add');
     if (quickAdd) quickAdd.addEventListener('click', onQuickAdd);
+    var quickMore = app.querySelector('#quick-more');
+    if (quickMore) quickMore.addEventListener('click', function () {
+      var before = state.quickShown;
+      state.quickShown += window.RiloI18n.BATCH;
+      render();
+      var chips = app.querySelectorAll('[data-quick]');
+      if (chips[before]) chips[before].focus({ preventScroll: true });
+    });
     var quickSkip = app.querySelector('#quick-skip');
     if (quickSkip) quickSkip.addEventListener('click', function () {
       state.screen = 'app';
@@ -1243,7 +1287,10 @@
         var id = chip.getAttribute('data-quick');
         // Picking starts at emerging; the pick's stage button moves it on.
         if (state.quickPick[id]) delete state.quickPick[id];
-        else state.quickPick[id] = 'emerging';
+        else {
+          state.quickPick[id] = 'emerging';
+          autoGrowQuickStart();
+        }
         render();
         var again = app.querySelector('[data-quick="' + CSS.escape(id) + '"]');
         if (again) again.focus();
@@ -1276,25 +1323,54 @@
 
   function showFormError(el, err) {
     el.textContent = err && err.code === 'account_required'
-      ? 'Make an account to keep entries.'
-      : (err && err.message) || 'Something went wrong. Try again.';
+      ? t('accountRequired')
+      : (err && err.message) || t('genericError');
     el.hidden = false;
   }
 
   // The welcome form. Chips toggle in place, so a typed name is never lost.
+  // The welcome form. Chips toggle in place, so a typed name is never lost,
+  // and switching the app language redraws the screen with every field kept.
   function bindSetup(form) {
     var nameEl = form.querySelector('#setup-name');
     var go = form.querySelector('[data-setup-go]');
     function goLabel() {
       var n = nameEl.value.trim();
-      go.innerHTML = esc(n ? 'Start ' + n + '’s word list' : 'Start the word list') + ' ' + icon('arrow', 20, { fill: 'none' });
+      state.setupDraft.name = nameEl.value;
+      go.innerHTML = esc(n ? t('startNameWordList', n) : t('startWordList')) + ' ' + icon('arrow', 20, { fill: 'none' });
     }
+    goLabel();
     nameEl.addEventListener('input', goLabel);
+    form.querySelector('#setup-month').addEventListener('change', function (e) {
+      state.setupDraft.month = e.target.value;
+    });
+    form.querySelector('#setup-year').addEventListener('change', function (e) {
+      state.setupDraft.year = Number(e.target.value);
+    });
+    form.querySelectorAll('[data-app-lang]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var next = btn.getAttribute('data-app-lang');
+        if (next === state.uiLang) return;
+        // Keep everything already typed or tapped across the switch.
+        state.setupDraft.name = nameEl.value;
+        state.setupDraft.month = form.querySelector('#setup-month').value;
+        state.setupDraft.year = Number(form.querySelector('#setup-year').value);
+        var other = form.querySelector('#setup-other');
+        state.setupDraft.other = other.value;
+        state.setupDraft.otherOpen = !form.querySelector('[data-setup-other-area]').hidden;
+        state.uiLang = next;
+        // The app language's own language starts picked.
+        if (!state.setupLangs[next]) state.setupLangs[next] = true;
+        render();
+        var again = app.querySelector('[data-app-lang="' + next + '"]');
+        if (again) again.focus();
+      });
+    });
     function bindChip(chip) {
       chip.addEventListener('click', function () {
-        var name = chip.getAttribute('data-setup-lang');
-        var on = !state.setupLangs[name];
-        if (on) state.setupLangs[name] = true; else delete state.setupLangs[name];
+        var key = chip.getAttribute('data-setup-lang');
+        var on = !state.setupLangs[key];
+        if (on) state.setupLangs[key] = true; else delete state.setupLangs[key];
         chip.classList.toggle('chip-on', on);
         chip.setAttribute('aria-pressed', String(on));
       });
@@ -1309,7 +1385,9 @@
     function addOther() {
       var v = other.value.trim().slice(0, 30);
       if (!v) { other.focus(); return; }
-      var exists = SETUP_LANGS.concat(state.setupExtra).find(function (l) { return l.toLowerCase() === v.toLowerCase(); });
+      var exists = SETUP_LANGS.concat(state.setupExtra).find(function (l) {
+        return setupLangName(l).toLowerCase() === v.toLowerCase() || l.toLowerCase() === v.toLowerCase();
+      });
       var name = exists || v;
       if (!exists) {
         state.setupExtra.push(v);
@@ -1327,7 +1405,9 @@
         if (target) target.click();
       }
       other.value = '';
+      state.setupDraft.other = '';
       area.hidden = true;
+      state.setupDraft.otherOpen = false;
     }
     form.querySelector('[data-setup-other-add]').addEventListener('click', addOther);
     other.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addOther(); } });
@@ -1341,7 +1421,7 @@
     errEl.hidden = true;
     var name = nameEl.value.trim();
     if (!name) {
-      errEl.textContent = 'Add your child’s name.';
+      errEl.textContent = t('nameRequired');
       errEl.hidden = false;
       nameEl.focus();
       return;
@@ -1352,18 +1432,21 @@
     try {
       var child = await api('/api/child', {
         method: 'PUT',
-        body: JSON.stringify({ name: name, birth_month: birthMonth }),
+        body: JSON.stringify({ name: name, birth_month: birthMonth, ui_language: state.uiLang }),
       });
-      // The languages at home become the family's languages, ready to pick.
+      // The languages at home become the family's languages, ready to pick,
+      // named the way the welcome screen showed them.
       var picked = Object.keys(state.setupLangs);
       for (var i = 0; i < picked.length; i++) {
-        var lang = await api('/api/languages', { method: 'POST', body: JSON.stringify({ name: picked[i] }) });
+        var langName = SETUP_LANGS.indexOf(picked[i]) !== -1 ? setupLangName(picked[i]) : picked[i];
+        var lang = await api('/api/languages', { method: 'POST', body: JSON.stringify({ name: langName }) });
         if (!state.languages.some(function (l) { return l.id === lang.id; })) {
           state.languages.push(Object.assign({ uses: 0, is_demo: false }, lang));
         }
       }
-      state.child = child;
+      applyChild(child);
       state.quickPick = {};
+      state.quickShown = window.RiloI18n.BATCH;
       // Straight into the quick start, so a family arriving with a child
       // who already talks can load what they know in one go.
       state.screen = 'quickstart';
@@ -1378,30 +1461,40 @@
   async function onQuickAdd() {
     var errEl = app.querySelector('[data-form-error]');
     errEl.hidden = true;
-    var items = [];
-    QUICK_STARTS.forEach(function (group) {
-      group.items.forEach(function (item, i) {
-        if (state.quickPick[group.kind + '-' + i]) {
-          items.push({
-            kind: group.kind,
-            label: item.label,
-            sounds_like: item.sounds_like || '',
-            category: inferCategory(item.label),
-            mastery: state.quickPick[group.kind + '-' + i],
-          });
-        }
+    // Picks can only be made on shown ideas, but every batch counts: walk
+    // the whole catalogue so an earlier batch's picks are never lost.
+    var items = quickIdeas().filter(function (idea) { return state.quickPick[idea.id]; })
+      .map(function (idea) {
+        var words = idea[state.uiLang] || idea.en;
+        return {
+          kind: idea.kind,
+          label: words.label,
+          sounds_like: words.sounds_like || '',
+          category: idea.category,
+          mastery: state.quickPick[idea.id],
+        };
       });
-    });
     var button = app.querySelector('#quick-add');
     button.disabled = true;
     try {
       await api('/api/quick-start', { method: 'POST', body: JSON.stringify({ items: items }) });
       state.screen = 'app';
       await refreshState();
-      toast('Added ' + items.length + (items.length === 1 ? ' entry' : ' entries'));
+      toast(t('addedCount', items.length));
     } catch (err) {
       showFormError(errEl, err);
       button.disabled = false;
+    }
+  }
+
+  // The saved child (and so the app language) is the source of truth from
+  // the first load on; no child means the welcome keeps the browser's.
+  function applyChild(child) {
+    state.child = child;
+    var next = child ? (child.ui_language === 'es' ? 'es' : 'en') : state.uiLang;
+    if (next !== state.uiLang) {
+      state.uiLang = next;
+      fmtCache = {};
     }
   }
 
@@ -1411,7 +1504,7 @@
     render();
     try {
       var data = await api('/api/state');
-      state.child = data.child;
+      applyChild(data.child);
       state.languages = data.languages || [];
       state.entries = data.entries || [];
       state.screen = 'app';
@@ -1426,7 +1519,7 @@
   // underneath is replaced.
   async function refreshState() {
     var data = await api('/api/state');
-    state.child = data.child;
+    applyChild(data.child);
     state.languages = data.languages || [];
     state.entries = data.entries || [];
     render();
@@ -1436,14 +1529,13 @@
     var g = entryConcept(entry);
     var shared = g.entries.length > 1;
     var ok = await confirmDialog(
-      'Delete “' + entry.label + '”?',
-      'This removes it from ' + state.child.name + '’s log and word count. Its notes and journey go too.' +
-        (shared ? ' The other languages stay.' : ''));
+      t('deleteTitle', entry.label),
+      t('deleteBody', state.child.name) + (shared ? t('deleteBodyOthers') : ''));
     if (!ok) return;
     try {
       await api('/api/entries/' + entry.id, { method: 'DELETE' });
       state.entries = state.entries.filter(function (e) { return e.id !== entry.id; });
-      toast('Deleted ' + entry.label);
+      toast(t('deleted', entry.label));
       // Deleting the title promotes the next language, whose page takes over
       // the hash; a last language goes back to the log.
       var rest = entry.concept_id != null
@@ -1453,7 +1545,7 @@
       else navigate('log');
       refreshState().catch(function () {});
     } catch (err) {
-      toast(err.code === 'account_required' ? 'Make an account to keep entries.' : (err.message || 'Could not delete it. Try again.'));
+      toast(err.code === 'account_required' ? t('accountRequired') : (err.message || t('deleteFailed')));
     }
   }
 
@@ -1465,24 +1557,40 @@
     var content = document.createElement('form');
     content.novalidate = true;
     content.innerHTML = '' +
-'<div class="sheet-head"><button type="button" class="link-btn" data-cancel>Cancel</button><h2 class="sheet-title">Edit details</h2><span style="width:44px"></span></div>' +
+'<div class="sheet-head"><button type="button" class="link-btn" data-cancel>' + esc(t('cancel')) + '</button><h2 class="sheet-title">' + esc(t('editDetails')) + '</h2><span style="width:44px"></span></div>' +
 '<div class="flex flex-col gap-4">' +
-'<div><label class="field-label" for="child-name">Name</label>' +
+'<div><span class="field-label" id="child-lang-label">' + esc(t('appLanguage')) + '</span>' +
+'  <div class="seg2" role="radiogroup" aria-labelledby="child-lang-label">' +
+'    <button type="button" role="radio" data-child-lang="en" aria-checked="' + (state.uiLang === 'en') + '"' + (state.uiLang === 'en' ? ' class="on"' : '') + '>' + esc(t('english')) + '</button>' +
+'    <button type="button" role="radio" data-child-lang="es" aria-checked="' + (state.uiLang === 'es') + '"' + (state.uiLang === 'es' ? ' class="on"' : '') + '>' + esc(t('spanish')) + '</button>' +
+'  </div></div>' +
+'<div><label class="field-label" for="child-name">' + esc(t('name')) + '</label>' +
 '<input id="child-name" class="field" type="text" maxlength="40" autocomplete="off" value="' + esc(name) + '"></div>' +
-'<div class="grid grid-cols-2 gap-3"><div><label class="field-label" for="child-month">Birth month</label>' + monthSelectHtml('child-month', mm) + '</div>' +
-'<div><label class="field-label" for="child-year">Year</label>' + yearSelectHtml('child-year', yyyy) + '</div></div>' +
-'<p class="sub" style="font-size:13px">Ages count from the birth month.</p>' +
+'<div class="grid grid-cols-2 gap-3"><div><label class="field-label" for="child-month">' + esc(t('birthMonth')) + '</label>' + monthSelectHtml('child-month', mm) + '</div>' +
+'<div><label class="field-label" for="child-year">' + esc(t('year')) + '</label>' + yearSelectHtml('child-year', yyyy) + '</div></div>' +
+'<p class="sub" style="font-size:13px">' + esc(t('agesFromMonth')) + '</p>' +
 '<p data-form-error hidden class="form-error"></p>' +
-'<button type="submit" class="btn-primary">Save changes</button></div>';
+'<button type="submit" class="btn-primary">' + esc(t('saveChanges')) + '</button></div>';
     var errEl = content.querySelector('[data-form-error]');
     var sheet = presentSheet(content, null);
+    var chosenLang = state.uiLang;
+    content.querySelectorAll('[data-child-lang]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        chosenLang = btn.getAttribute('data-child-lang');
+        content.querySelectorAll('[data-child-lang]').forEach(function (b) {
+          var on = b.getAttribute('data-child-lang') === chosenLang;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-checked', String(on));
+        });
+      });
+    });
     content.querySelector('[data-cancel]').addEventListener('click', function () { sheet.dismiss(); });
     content.addEventListener('submit', async function (event) {
       event.preventDefault();
       errEl.hidden = true;
       var nextName = content.querySelector('#child-name').value.trim();
       if (!nextName) {
-        errEl.textContent = 'Add your child’s name.';
+        errEl.textContent = t('nameRequired');
         errEl.hidden = false;
         return;
       }
@@ -1492,12 +1600,12 @@
       try {
         var child = await api('/api/child', {
           method: 'PUT',
-          body: JSON.stringify({ name: nextName, birth_month: birthMonth }),
+          body: JSON.stringify({ name: nextName, birth_month: birthMonth, ui_language: chosenLang }),
         });
-        state.child = child;
+        applyChild(child);
         render();
         sheet.dismiss();
-        toast('Details saved');
+        toast(t('detailsSaved'));
       } catch (err) {
         showFormError(errEl, err);
         button.disabled = false;
@@ -1569,7 +1677,7 @@
       content.querySelector('[data-label-the]').textContent = (!isEdit && ids.length > 1)
         ? k.the + ' in ' + langName(ids[0]) : k.the;
       content.querySelector('[data-label-input]').placeholder = k.eg;
-      content.querySelector('[data-label-how]').innerHTML = esc(k.how(name)) + ' <span style="font-weight:400">optional</span>';
+      content.querySelector('[data-label-how]').innerHTML = esc(k.how(name)) + ' <span style="font-weight:400">' + esc(t('optional')) + '</span>';
       content.querySelector('[data-how-input]').placeholder = k.hint;
       content.querySelector('[data-how-input]').classList.toggle('says', form.kind !== 'sign');
       content.querySelectorAll('[data-kind]').forEach(function (btn) {
@@ -1618,9 +1726,9 @@
       if (form.newLang) {
         holder.innerHTML = '' +
 '<div class="flex items-center gap-2">' +
-'  <label class="sr-only" for="new-lang">New language</label>' +
-'  <input id="new-lang" data-new-lang-name class="field" type="text" maxlength="30" autocomplete="off" placeholder="e.g. Portuguese">' +
-'  <button type="button" class="btn-secondary" data-new-lang-add>Add</button>' +
+'  <label class="sr-only" for="new-lang">' + esc(t('newLanguage')) + '</label>' +
+'  <input id="new-lang" data-new-lang-name class="field" type="text" maxlength="30" autocomplete="off" placeholder="' + esc(t('newLanguagePlaceholder')) + '">' +
+'  <button type="button" class="btn-secondary" data-new-lang-add>' + esc(t('add')) + '</button>' +
 '</div>';
         var input = holder.querySelector('[data-new-lang-name]');
         input.focus({ preventScroll: true });
@@ -1640,7 +1748,7 @@
             labels();
             extraWords();
           } catch (err) {
-            toast(err.code === 'account_required' ? 'Make an account to keep entries.' : (err.message || 'Could not add the language.'));
+            toast(err.code === 'account_required' ? t('accountRequired') : (err.message || t('couldNotAddLanguage')));
           }
         };
         holder.querySelector('[data-new-lang-add]').addEventListener('click', submit);
@@ -1650,9 +1758,9 @@
         return;
       }
       if (isEdit) {
-        holder.innerHTML = '<div class="chips-row" role="radiogroup" aria-label="Language">' + chipListHtml(form) + '</div>';
+        holder.innerHTML = '<div class="chips-row" role="radiogroup" aria-label="' + esc(t('language')) + '">' + chipListHtml(form) + '</div>';
       } else {
-        holder.innerHTML = '<div class="chips-row" role="group" aria-label="Languages">' + chipListHtml(form) + '</div>';
+        holder.innerHTML = '<div class="chips-row" role="group" aria-label="' + esc(t('languages')) + '">' + chipListHtml(form) + '</div>';
       }
       holder.querySelectorAll('[data-lang]').forEach(function (chip) {
         chip.addEventListener('click', function () {
@@ -1694,20 +1802,20 @@
         ? groups.find(function (g) { return g.key === 'c' + form.conceptId; }) : null;
       var others = cur
         ? cur.entries.filter(function (x) { return !isEdit || x.id !== entry.id; }) : [];
-      var label = '<p class="field-label">Linked entries <span style="font-weight:400">optional</span></p>';
+      var label = '<p class="field-label">Linked entries <span style="font-weight:400">' + esc(t('optional')) + '</span></p>';
 
       // Linked: the card's other entries, with an Unlink that puts this one
       // back on an entry of its own.
       if (cur && others.length) {
         holder.innerHTML = label +
-          '<div class="link-row"><span>Linked with</span>' +
+          '<div class="link-row"><span>' + esc(t('linkedWith')) + '</span>' +
           others.map(function (o) {
             var t = o.language_name ? langTone(o.language_name) : KINDS[o.kind].tone;
             return '<b>' + esc(o.label) + '</b><span class="lang-chip ' + TINT[t] + ' ' + INK[t] + '">' +
               esc(chipText(o, form.kind)) + '</span>';
           }).join('') +
           '<span style="flex:1"></span>' +
-          '<button type="button" class="link-btn" data-unlink>Unlink</button></div>';
+          '<button type="button" class="link-btn" data-unlink>' + esc(t('unlink')) + '</button></div>';
         holder.querySelector('[data-unlink]').addEventListener('click', function () {
           form.conceptId = null;
           form.linkOpen = false;
@@ -1730,16 +1838,16 @@
       var suggest = matches[0];
       if (suggest && !form.linkOpen) {
         var hit = suggest.entries.find(function (x) { return foldLabel(x.label) === typedKey; });
-        var t = hit.language_name ? langTone(hit.language_name) : KINDS[hit.kind].tone;
+        var htone = hit.language_name ? langTone(hit.language_name) : KINDS[hit.kind].tone;
         holder.innerHTML = label +
-          '<div class="link-row"><span>You already have</span><b>' + esc(hit.label) + '</b>' +
+          '<div class="link-row"><span>' + esc(t('youAlreadyHave')) + '</span><b>' + esc(hit.label) + '</b>' +
           (hit.language_name
-            ? '<span class="lang-chip ' + TINT[t] + ' ' + INK[t] + '">' + esc(hit.language_name) + '</span>'
+            ? '<span class="lang-chip ' + TINT[htone] + ' ' + INK[htone] + '">' + esc(hit.language_name) + '</span>'
             : '') +
           '<span class="sub">as a ' + KINDS[hit.kind].one.toLowerCase() + '</span>' +
           '<span style="flex:1"></span>' +
           '<button type="button" class="link-btn" data-link-dismiss>Not now</button>' +
-          '<button type="button" class="link-btn" data-link-suggest>Link</button></div>';
+          '<button type="button" class="link-btn" data-link-suggest>' + esc(t('link')) + '</button></div>';
         holder.querySelector('[data-link-dismiss]').addEventListener('click', function () {
           form.dismissedKey = typedKey;
           linkArea();
@@ -1766,8 +1874,8 @@
         }).slice(0, 6);
         holder.innerHTML = label +
           '<div class="flex flex-col gap-2">' +
-          '<input data-link-search class="field" type="search" autocomplete="off" placeholder="Search ' +
-            esc(name) + '’s words, sounds and signs" value="' + esc(form.linkQuery) + '" aria-label="Search entries to link">' +
+          '<input data-link-search class="field" type="search" autocomplete="off" placeholder="' +
+            esc(t('searchEntries', name, 'words, sounds and signs')) + '" value="' + esc(form.linkQuery) + '" aria-label="' + esc(t('searchEntriesAria')) + '">' +
           (candidates.length
             ? '<ul class="entry-list">' + candidates.map(function (g) {
                 var e2 = g.title;
@@ -1780,7 +1888,7 @@
                   (s2 ? '<span class="entry-note">' + esc(s2) + '</span>' : '') + '</span>' +
                   '<span class="entry-date">' + esc(e2.noticed_unknown ? 'No date' : fmtShort(e2.said_on)) + '</span></button></li>';
               }).join('') + '</ul>'
-            : '<p class="sub">No matching entries yet.</p>') +
+            : '<p class="sub">' + esc(t('noMatching', 'entries')) + '</p>') +
           '</div>';
         var searchEl = holder.querySelector('[data-link-search]');
         searchEl.addEventListener('input', function () {
@@ -1802,7 +1910,7 @@
 
       // Not linked: the dashed chip opens the picker.
       holder.innerHTML = label +
-        '<button type="button" class="chip chip-dashed" data-link-open>+ Link to an entry</button>';
+        '<button type="button" class="chip chip-dashed" data-link-open>' + esc(t('linkToEntry')) + '</button>';
       holder.querySelector('[data-link-open]').addEventListener('click', function () {
         form.linkOpen = true;
         linkArea();
@@ -1821,11 +1929,11 @@
       // An already-learned entry keeps its note while its date is unchanged;
       // changing the date turns it into an ordinary dated first.
       if (isEdit && entry.already_learned && value === entry.said_on) {
-        hint.textContent = 'Already learned. Change the date only if you remember when.';
+        hint.textContent = t('keepLearnedNote');
         hint.hidden = false;
         return;
       }
-      hint.textContent = name + ' was ' + formatAge(ageMonths(state.child.birthday, value), name);
+      hint.textContent = t('wasAge', name, formatAge(ageMonths(state.child.birthday, value), name));
       hint.hidden = false;
     }
 
@@ -1908,12 +2016,12 @@
         payload.said_on = null;
       }
       if (!payload.label.trim()) {
-        errEl.textContent = form.kind === 'sound' ? 'Name the animal or thing.' : form.kind === 'sign' ? 'Write what the sign means.' : 'Write the word.';
+        errEl.textContent = form.kind === 'sound' ? t('nameTheThing') : form.kind === 'sign' ? t('writeSign') : t('writeWord');
         errEl.hidden = false;
         return;
       }
       if (!payload.noticed_unknown && !payload.said_on) {
-        errEl.textContent = "Pick a date, or choose I don't remember.";
+        errEl.textContent = t('pickDateOrUnknown');
         errEl.hidden = false;
         return;
       }
@@ -1924,7 +2032,7 @@
           var field = content.querySelector('[data-lang-word="' + ids[i] + '"]');
           var word = field ? field.value.trim() : '';
           if (!word) {
-            errEl.textContent = 'Write the word in ' + langName(ids[i]) + '.';
+            errEl.textContent = t('writeWordIn', langName(ids[i]));
             errEl.hidden = false;
             return;
           }
@@ -1948,7 +2056,7 @@
           await api('/api/entries', { method: 'POST', body: JSON.stringify(payload) });
         }
         sheet.dismiss();
-        toast(isEdit ? 'Saved' : 'Added ' + joinNames([payload.label.trim()].concat(extras.map(function (x) { return x.label; }))));
+        toast(isEdit ? t('saved') : t('added', joinNames([payload.label.trim()].concat(extras.map(function (x) { return x.label; })))));
         refreshState().catch(function () {});
       } catch (err) {
         showFormError(errEl, err);
@@ -1964,9 +2072,9 @@
     var today = todayIso();
     var name = state.child.name;
     return '' +
-'<div class="sheet-head"><button type="button" class="link-btn" data-cancel>Cancel</button>' +
-'  <h2 class="sheet-title">' + (isEdit ? 'Edit entry' : 'New for ' + esc(name)) + '</h2><span style="width:44px"></span></div>' +
-'<div class="seg3" role="radiogroup" aria-label="Entry type">' +
+'<div class="sheet-head"><button type="button" class="link-btn" data-cancel>' + esc(t('cancel')) + '</button>' +
+'  <h2 class="sheet-title">' + esc(isEdit ? t('editEntry') : t('newFor', name)) + '</h2><span style="width:44px"></span></div>' +
+'<div class="seg3" role="radiogroup" aria-label="' + esc(t('entryType')) + '">' +
   ['word', 'sound', 'sign'].map(function (kind) {
     return '<button type="button" role="radio" aria-checked="false" data-kind="' + kind + '"></button>';
   }).join('') +
@@ -1976,29 +2084,29 @@
 '  <input id="entry-label" data-label-input class="big-input" type="text" maxlength="60" autocomplete="off" value="' + (isEdit ? esc(entry.label) : '') + '">' +
 '</div>' +
 '<div class="mt-4" data-link-area></div>' +
-'<div class="mt-4"><p class="field-label" id="lang-label">' + (isEdit ? 'Language' : 'Languages') + ' <span style="font-weight:400">optional</span></p><div data-lang-area></div>' +
-  (isEdit ? '' : '<p class="sub" style="font-size:13px;margin-top:6px">Pick more than one if ' + esc(name) + ' uses it in each.</p>') +
+'<div class="mt-4"><p class="field-label" id="lang-label">' + esc(isEdit ? t('language') : t('languages')) + ' <span style="font-weight:400">' + esc(t('optional')) + '</span></p><div data-lang-area></div>' +
+  (isEdit ? '' : '<p class="sub" style="font-size:13px;margin-top:6px">' + esc(t('pickMoreThanOne', name)) + '</p>') +
 '</div>' +
 (isEdit ? '' : '<div data-lang-words></div>') +
 '<div class="mt-4"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">' +
-'  <label class="field-label" for="entry-date" style="display:flex;align-items:center;gap:6px;margin:0">' + icon('calendar', 20) + 'First noticed <span style="font-weight:400">optional</span></label>' +
-'  <button type="button" class="chip" data-noticed-unknown aria-pressed="false">I don\'t remember</button></div>' +
+'  <label class="field-label" for="entry-date" style="display:flex;align-items:center;gap:6px;margin:0">' + icon('calendar', 20) + esc(t('firstNoticed')) + ' <span style="font-weight:400">' + esc(t('optional')) + '</span></label>' +
+'  <button type="button" class="chip" data-noticed-unknown aria-pressed="false">' + esc(t('dontRemember')) + '</button></div>' +
 '  <input id="entry-date" data-date class="field" type="date" value="' + (isEdit ? esc(entry.said_on) : today) +
      '" min="' + esc(state.child.birthday) + '" max="' + today + '">' +
 '  <p data-age-hint class="sub mt-1" style="font-size:13px"></p></div>' +
 '<div class="mt-4"><label class="field-label" for="entry-how" data-label-how></label>' +
 '  <input id="entry-how" data-how-input class="field" type="text" maxlength="80" autocomplete="off" value="' + (isEdit ? esc(entry.sounds_like || '') : '') + '"></div>' +
-'<div class="mt-4"><label class="field-label" for="entry-note">Notes <span style="font-weight:400">optional</span></label>' +
-'  <textarea id="entry-note" data-note class="field" maxlength="280" placeholder="Where were you? What prompted it?">' + (isEdit ? esc(entry.note || '') : '') + '</textarea></div>' +
-'<fieldset class="mt-4"><legend class="field-label">How well does ' + esc(name) + ' use it?</legend>' +
-'  <div class="m-choice-grid" role="radiogroup" aria-label="Mastery">' +
+'<div class="mt-4"><label class="field-label" for="entry-note">' + esc(t('notes')) + ' <span style="font-weight:400">' + esc(t('optional')) + '</span></label>' +
+'  <textarea id="entry-note" data-note class="field" maxlength="280" placeholder="' + esc(t('notesPlaceholder')) + '">' + (isEdit ? esc(entry.note || '') : '') + '</textarea></div>' +
+'<fieldset class="mt-4"><legend class="field-label">' + esc(t('howWell', name)) + '</legend>' +
+'  <div class="m-choice-grid" role="radiogroup" aria-label="' + esc(t('mastery')) + '">' +
     ['emerging', 'practicing', 'mastered'].map(function (l) {
       var m = MASTERY[l];
       return '<button type="button" class="m-choice" role="radio" aria-checked="false" data-mastery="' + l + '">' + icon(m.icon, 34) + '<b>' + m.label + '</b><span>' + m.hint + '</span></button>';
     }).join('') +
 '  </div></fieldset>' +
 '<p data-form-error hidden class="form-error mt-3"></p>' +
-'<button type="submit" class="btn-primary mt-5 w-full" data-save>' + (isEdit ? 'Save changes' : 'Save to ' + esc(name) + '’s words') + '</button>';
+'<button type="submit" class="btn-primary mt-5 w-full" data-save>' + esc(isEdit ? t('saveChanges') : t('saveTo', name)) + '</button>';
   }
 
   // Language chips: every family language, most used first, then the
@@ -2011,7 +2119,7 @@
       return '<button type="button" ' + state + ' class="chip' + (on ? ' ' + LANG_ON[langTone(l.name)] : '') +
         '" data-lang="' + l.id + '">' + esc(l.name) + '</button>';
     }).join('') +
-      '<button type="button" class="chip chip-dashed" data-new-lang>+ New language</button>';
+      '<button type="button" class="chip chip-dashed" data-new-lang>' + esc(t('plusNewLanguage')) + '</button>';
   }
 
   window.addEventListener('hashchange', function () {
