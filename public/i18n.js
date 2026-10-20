@@ -53,12 +53,8 @@
       return 'Tap everything ' + name + ' already says or signs. Rilo keeps them as already learned, with no date. ' +
         'Tap a pick’s stage to show how well ' + name + ' says it, like Emerging for “wa” for water.';
     },
-    ideasFor: function (band, name) {
-      var label = band === 12 ? 'about 12 months'
-        : band === 18 ? 'about 18 months'
-        : band === 24 ? 'about 24 months'
-        : '3 years and up';
-      return 'Ideas for ' + label + ', like ' + name + '.';
+    ideasFor: function (name) {
+      return 'Suggested words for kids around ' + name + '.';
     },
     moreIdeas: 'More ideas',
     everyIdea: 'That’s every idea for now. Add anything else from Home.',
@@ -314,12 +310,8 @@
       return 'Toca todo lo que ' + name + ' ya dice o señala. Rilo lo guarda como ya aprendido, sin fecha. ' +
         'Toca la etapa de una elección para mostrar qué tan bien lo dice ' + name + ', como Empezando para “wa” en lugar de agua.';
     },
-    ideasFor: function (band, name) {
-      var label = band === 12 ? 'unos 12 meses'
-        : band === 18 ? 'unos 18 meses'
-        : band === 24 ? 'unos 24 meses'
-        : '3 años o más';
-      return 'Ideas para ' + label + ', como ' + name + '.';
+    ideasFor: function (name) {
+      return 'Palabras sugeridas para niños de la edad de ' + name + '.';
     },
     moreIdeas: 'Más ideas',
     everyIdea: 'Esas son todas las ideas por ahora. Añade lo demás desde Inicio.',
@@ -548,6 +540,7 @@
     'Keep how it sounds under 80 characters.': 'Mantén el sonido en menos de 80 caracteres.',
     'Keep the note under 280 characters.': 'Mantén la nota en menos de 280 caracteres.',
     'Pick a date.': 'Elige una fecha.',
+    "Pick a date, or choose I don't remember.": 'Elige una fecha, o elige No lo recuerdo.',
     "Add your child's name and birthday first.": 'Añade primero el nombre y la fecha de nacimiento.',
     'Pick a date on or after the birthday.': 'Elige una fecha en o después del nacimiento.',
     'Pick a date no later than today.': 'Elige una fecha no posterior a hoy.',
@@ -556,6 +549,8 @@
     'Link it to an entry of the same type.': 'Enlázala a una entrada del mismo tipo.',
     'Choose at least one first to add.': 'Elige al menos una entrada.',
     'Add up to 200 at a time.': 'Añade hasta 200 a la vez.',
+    'Add up to 10 languages at a time.': 'Añade hasta 10 idiomas a la vez.',
+    'Write the word in each language.': 'Escribe la palabra en cada idioma.',
     'One of the picks is missing its word, animal or sign.': 'A una elección le falta la palabra, el animal o la seña.',
     'First not found.': 'No se encontró la entrada.',
     'Something went wrong. Try again.': 'Algo salió mal. Inténtalo de nuevo.',

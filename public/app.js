@@ -310,9 +310,17 @@
     var months = state.child ? ageMonths(state.child.birthday, todayIso()) : 12;
     return window.RiloI18n.ideasFor(months);
   }
-  function quickBand() {
-    var months = state.child ? ageMonths(state.child.birthday, todayIso()) : 12;
-    return window.RiloI18n.bandFor(months);
+  // The creator's ask: once most of the ideas on screen are picked, reveal
+  // the next dozen on their own, so a parent tapping through rarely has to
+  // reach for More ideas.
+  function autoGrowQuickStart() {
+    var ideas = quickIdeas();
+    if (state.quickShown >= ideas.length) return;
+    var shown = ideas.slice(0, state.quickShown);
+    var picked = shown.filter(function (idea) { return state.quickPick[idea.id]; }).length;
+    if (picked > shown.length / 2) {
+      state.quickShown = Math.min(ideas.length, state.quickShown + window.RiloI18n.BATCH);
+    }
   }
 
   // Languages offered on the welcome screen, by code, named in the app
@@ -684,7 +692,7 @@
 '<main data-screen="quickstart" class="page">' + brandHtml(2) +
 '  <div><h1 class="setup-title">' + esc(t('quickTitle', name)) + '</h1>' +
 '  <p class="sub" style="margin-top:8px">' + esc(t('quickBody', name)) + '</p>' +
-'  <p class="ink-sage" style="font-weight:600;margin-top:10px;font-size:14px">' + esc(t('ideasFor', quickBand(), name)) + '</p></div>' +
+'  <p class="ink-sage" style="font-weight:600;margin-top:10px;font-size:14px">' + esc(t('ideasFor', name)) + '</p></div>' +
     sections + more +
 '  <p data-form-error hidden class="form-error"></p>' +
 '</main>' +
@@ -1270,7 +1278,10 @@
         var id = chip.getAttribute('data-quick');
         // Picking starts at emerging; the pick's stage button moves it on.
         if (state.quickPick[id]) delete state.quickPick[id];
-        else state.quickPick[id] = 'emerging';
+        else {
+          state.quickPick[id] = 'emerging';
+          autoGrowQuickStart();
+        }
         render();
         var again = app.querySelector('[data-quick="' + CSS.escape(id) + '"]');
         if (again) again.focus();
