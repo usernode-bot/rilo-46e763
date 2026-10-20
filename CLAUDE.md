@@ -147,10 +147,16 @@ The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights
   tiles count each entry (each language) on its own. Insights' "Across
   languages" lists each concept with two or more entries once, with each
   language's stage under it. Grouping is by `concept_id`, or the entry alone
-  when it is null (`groupConcepts()` in `public/insights.js`). Linking is
-  done by the parent from the add/edit sheet ("Same word in another
-  language") or the entry page ("Add another language"); only same-kind
-  concepts are allowed, and Rilo never translates or links on its own.
+  when it is null (`groupConcepts()` in `public/insights.js`). A concept may
+  hold entries of **any kind**: `concepts.kind` is the kind it was created
+  with (or its lone entry's kind) and is not read for grouping, while
+  `g.kinds` lists each kind its entries have (title's kind first). A card
+  shows in, and counts toward, each kind it holds (`countKind`, the log's
+  kind filter, Insights), but once in totals. Linking is done by the parent
+  from the add/edit sheet ("Linked entries": an exact-label match of any
+  kind offers Link / Not now, and the picker searches every kind) or the
+  entry page ("Add another language", where the kind can switch too); Rilo
+  never translates or links on its own.
   `ensureSchema()` backfills on every boot, grouping remaining
   `concept_id IS NULL` rows by owner, kind and exact lower-cased label
   (accents not folded), so it is idempotent.
