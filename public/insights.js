@@ -42,6 +42,14 @@
     return Array.from(map.values()).map(function (g) {
       g.entries.sort(function (a, b) { return (a.id || 0) - (b.id || 0); });
       g.title = g.entries[0];
+      // A card may hold entries of more than one kind since "car" as a word
+      // can be linked to "car" as a sound. kinds lists each kind once, in
+      // entry order so the title's kind comes first; kind stays the title's.
+      g.kind = g.title.kind;
+      g.kinds = [];
+      g.entries.forEach(function (e) {
+        if (g.kinds.indexOf(e.kind) === -1) g.kinds.push(e.kind);
+      });
       // A card is "already learned" only when every language on it came from
       // a quick-start pick, and undated only when no language has a date.
       // Either way it is filed at the day it has, for sorting alone.
@@ -134,9 +142,9 @@
       .sort(function (a, b) { return b.first_on.localeCompare(a.first_on); })
       .map(function (c) {
         return {
-          key: c.key, title: c.title.label, kind: c.kind,
+          key: c.key, title: c.title.label, kind: c.kind, kinds: c.kinds,
           languages: c.entries.map(function (e) {
-            return { id: e.id, label: e.label, language_name: e.language_name || null, mastery: masteryOf(e) };
+            return { id: e.id, label: e.label, kind: e.kind, language_name: e.language_name || null, mastery: masteryOf(e) };
           }),
         };
       });
