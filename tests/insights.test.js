@@ -90,8 +90,8 @@ test('acrossLanguages lists multi-language words once, newest first', () => {
   assert.equal(data.acrossLanguages.length, 1);
   assert.deepEqual(data.acrossLanguages[0].title, 'water');
   assert.deepEqual(data.acrossLanguages[0].languages, [
-    { id: 1, label: 'water', language_name: 'English', mastery: 'mastered' },
-    { id: 5, label: 'agua', language_name: 'Spanish', mastery: 'emerging' },
+    { id: 1, kind: 'word', label: 'water', language_name: 'English', mastery: 'mastered' },
+    { id: 5, kind: 'word', label: 'agua', language_name: 'Spanish', mastery: 'emerging' },
   ]);
   const alone = summarize([
     { id: 1, kind: 'word', label: 'ball', concept_id: null, said_on: '2026-10-01', language_name: 'English', mastery: 'emerging' },
@@ -192,6 +192,39 @@ test('a card with one dated language is filed at that day', () => {
   ]);
   assert.equal(groups[0].undated, false);
   assert.equal(groups[0].first_on, '2026-05-03');
+});
+
+test('groupConcepts lists every kind on a mixed card', () => {
+  const soundingCar = { id: 1, kind: 'sound', label: 'car', concept_id: 12, said_on: '2026-09-02', language_name: 'English' };
+  const saidCar = { id: 2, kind: 'word', label: 'car', concept_id: 12, said_on: '2026-10-20', language_name: 'English' };
+  // The title keeps its own kind; kinds holds each kind once, title first.
+  const groups = groupConcepts([saidCar, soundingCar]);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].kind, 'sound');
+  assert.deepEqual(groups[0].kinds, ['sound', 'word']);
+  assert.deepEqual(groupConcepts([saidCar])[0].kinds, ['word']);
+});
+
+test('a mixed card counts once in totals, and once per kind it holds', () => {
+  const data = summarize([
+    { id: 1, kind: 'sound', label: 'car', concept_id: 12, said_on: '2026-10-18', language_name: 'English', mastery: 'practicing' },
+    { id: 2, kind: 'word', label: 'car', concept_id: 12, said_on: '2026-10-20', language_name: 'English', mastery: 'emerging' },
+  ], '2026-10-20');
+  assert.equal(data.total, 1);
+  assert.equal(data.thisWeek, 1);
+  assert.equal(data.growth[data.growth.length - 1].total, 1);
+  assert.equal(data.counts.word, 1);
+  assert.equal(data.counts.sound, 1);
+});
+
+test('acrossLanguages carries kinds', () => {
+  const data = summarize([
+    { id: 1, kind: 'sound', label: 'car', concept_id: 12, said_on: '2026-09-02', language_name: 'English', mastery: 'practicing' },
+    { id: 2, kind: 'word', label: 'car', concept_id: 12, said_on: '2026-10-20', language_name: 'Spanish', mastery: 'emerging' },
+  ], '2026-10-20');
+  assert.equal(data.acrossLanguages.length, 1);
+  assert.deepEqual(data.acrossLanguages[0].kinds, ['sound', 'word']);
+  assert.deepEqual(data.acrossLanguages[0].languages.map(l => l.kind), ['sound', 'word']);
 });
 
 test('undated firsts count in totals but stay out of growth and this week', () => {

@@ -25,9 +25,9 @@
   }
 
   // One card per word: a concept groups the entries that are the same word
-  // in different languages. Mastery and dates stay on each entry; the group
-  // only carries the word. An entry with no concept_id (an old cached state)
-  // stands alone.
+  // in different languages, or the same word as a word, sound and sign.
+  // Mastery and dates stay on each entry; the group only carries the word.
+  // An entry with no concept_id (an old cached state) stands alone.
   function groupConcepts(entries) {
     var map = new Map();
     entries.forEach(function (e, i) {
@@ -42,6 +42,13 @@
     return Array.from(map.values()).map(function (g) {
       g.entries.sort(function (a, b) { return (a.id || 0) - (b.id || 0); });
       g.title = g.entries[0];
+      // A card may hold more than one kind now: the title keeps its own kind,
+      // and kinds lists every kind in entry order (the title's first).
+      g.kind = g.title.kind;
+      g.kinds = g.entries.reduce(function (list, e) {
+        if (list.indexOf(e.kind) === -1) list.push(e.kind);
+        return list;
+      }, []);
       // A card is "already learned" only when every language on it came from
       // a quick-start pick, and undated only when no language has a date.
       // Either way it is filed at the day it has, for sorting alone.
@@ -134,9 +141,9 @@
       .sort(function (a, b) { return b.first_on.localeCompare(a.first_on); })
       .map(function (c) {
         return {
-          key: c.key, title: c.title.label, kind: c.kind,
+          key: c.key, title: c.title.label, kind: c.kind, kinds: c.kinds,
           languages: c.entries.map(function (e) {
-            return { id: e.id, label: e.label, language_name: e.language_name || null, mastery: masteryOf(e) };
+            return { id: e.id, kind: e.kind, label: e.label, language_name: e.language_name || null, mastery: masteryOf(e) };
           }),
         };
       });

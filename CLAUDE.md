@@ -135,22 +135,27 @@ The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights
   `demo_seeds`) are `staging:private` and per owner: every query is scoped to
   `owner_id = String(req.user.id)`; there are no public tables.
 - **One card per word: concepts.** A concept groups the entries that are the
-  same word in different languages ("agua" and "water" on one card).
-  `entries.concept_id` (nullable, added forward-only) names it; every entry
-  has one after boot. Mastery, dates and journeys stay on each entry, which
-  is already per language, so a concept carries only the grouping. The title
-  language of a card is the lowest entry id; deleting it promotes the next.
-  A card is filed in the log, and counted in growth, at the date its first
-  language was noticed (`first_on` = min `said_on`). Totals (Home's big
-  number, the Words/Sounds/Signs counts, the log count, Insights' growth and
-  "+N this week") count each concept once; "By language" and the mastery
-  tiles count each entry (each language) on its own. Insights' "Across
-  languages" lists each concept with two or more entries once, with each
-  language's stage under it. Grouping is by `concept_id`, or the entry alone
-  when it is null (`groupConcepts()` in `public/insights.js`). Linking is
-  done by the parent from the add/edit sheet ("Same word in another
-  language") or the entry page ("Add another language"); only same-kind
-  concepts are allowed, and Rilo never translates or links on its own.
+  same word in different languages ("agua" and "water" on one card), or the
+  same word as a word, sound and sign. `entries.concept_id` (nullable, added
+  forward-only) names it; every entry has one after boot. Mastery, dates and
+  journeys stay on each entry, which is already per language, so a concept
+  carries only the grouping. A concept may hold entries of any kind:
+  `concepts.kind` is the kind it was created with (or its lone entry's kind)
+  and is not read for grouping. The title entry of a card is the lowest entry
+  id; deleting it promotes the next, and `g.kind` follows the title.
+  `g.kinds` lists every kind the card holds, and a card shows in and counts
+  toward each of them, so the Words/Sounds/Signs counts on Home can add up to
+  more than the total. A card is filed in the log, and counted in growth, at
+  the date its first entry was noticed (`first_on` = min `said_on`). Totals
+  (Home's big number, the log count, Insights' growth and "+N this week")
+  count each concept once; "By language" and the mastery tiles count each
+  entry (each language) on its own. Insights' "Across languages" lists each
+  concept with two or more entries once, with each entry's stage under it.
+  Grouping is by `concept_id`, or the entry alone when it is null
+  (`groupConcepts()` in `public/insights.js`). Linking is done by the parent
+  from the add/edit sheet ("Linked entries", which suggests an exact-label
+  match of any kind with Link / Not now) or the entry page ("Add another
+  language"); Rilo never translates or links on its own.
   `ensureSchema()` backfills on every boot, grouping remaining
   `concept_id IS NULL` rows by owner, kind and exact lower-cased label
   (accents not folded), so it is idempotent.

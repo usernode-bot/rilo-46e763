@@ -391,11 +391,11 @@ async function validateEntry(req, res, ownerId) {
       return null;
     }
   }
-  // The concept this entry's language belongs to: absent means "leave it as
-  // it is" (an add makes its own concept), null means "put it on an entry of
-  // its own", an integer names a concept of the same owner to join.
+  // The concept this entry belongs to: absent means "leave it as it is" (an
+  // add makes its own concept), null means "put it on an entry of its own",
+  // an integer names a concept of the same owner to join. A concept may hold
+  // entries of any kind, so the concept's own kind is not checked.
   let concept_id;
-  let concept_kind = null;
   if (req.body.concept_id !== undefined) {
     if (req.body.concept_id === null) {
       concept_id = null;
@@ -406,13 +406,12 @@ async function validateEntry(req, res, ownerId) {
         return null;
       }
       const owned = await pool.query(
-        'SELECT kind FROM concepts WHERE id = $1 AND owner_id = $2',
+        'SELECT 1 FROM concepts WHERE id = $1 AND owner_id = $2',
         [concept_id, ownerId]);
       if (!owned.rows.length) {
         res.status(400).json({ error: 'Choose one of your entries to link to.' });
         return null;
       }
-      concept_kind = owned.rows[0].kind;
     }
   }
   return {
@@ -426,7 +425,6 @@ async function validateEntry(req, res, ownerId) {
     category: validCategory(req.body.category),
     mastery: validMastery(req.body),
     concept_id,
-    concept_kind,
   };
 }
 
@@ -434,9 +432,6 @@ app.post('/api/entries', wrap(async (req, res) => {
   const ownerId = String(req.user.id);
   const values = await validateEntry(req, res, ownerId);
   if (!values) return;
-  if (values.concept_id != null && values.concept_kind !== values.kind) {
-    return res.status(400).json({ error: 'Link it to an entry of the same type.' });
-  }
   // Several languages in one add: the extra languages join the same card.
   const alsoBody = req.body.also;
   const alsoRaw = Array.isArray(alsoBody) ? alsoBody : [];
@@ -614,8 +609,8 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
     }
     // Where this language's entry lives after the save. Absent keeps the
     // current concept; null puts it on an entry of its own (unless it is
-    // already alone there); an integer moves it to that concept, which must
-    // be of the same type.
+    // already alone there); an integer moves it to that concept, which may
+    // hold entries of any kind.
     let conceptId = current.concept_id;
     let movedFrom = null;
     const target = values.concept_id;
@@ -632,16 +627,12 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
           conceptId = concept.rows[0].id;
         }
       } else {
-        if (values.concept_kind !== values.kind) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({ error: 'Link it to an entry of the same type.' });
-        }
         movedFrom = conceptId;
         conceptId = target;
       }
     }
-    // A kept concept follows its entry's type when the entry is alone in it;
-    // otherwise the entry moves to a concept of its own.
+    // A kept concept follows its entry's kind when the entry is alone in it;
+    // otherwise the entry stays on its card beside every other kind there.
     if (movedFrom === null) {
       if (conceptId == null) {
         const concept = await client.query(
@@ -654,13 +645,7 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
           const mate = await client.query(
             'SELECT 1 FROM entries WHERE concept_id = $1 AND owner_id = $2 AND id <> $3 LIMIT 1',
             [conceptId, ownerId, id]);
-          if (mate.rows.length) {
-            movedFrom = conceptId;
-            const concept = await client.query(
-              'INSERT INTO concepts (owner_id, kind) VALUES ($1, $2) RETURNING id',
-              [ownerId, values.kind]);
-            conceptId = concept.rows[0].id;
-          } else {
+          if (!mate.rows.length) {
             await client.query('UPDATE concepts SET kind = $1 WHERE id = $2',
               [values.kind, conceptId]);
           }

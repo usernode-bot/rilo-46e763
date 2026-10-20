@@ -415,6 +415,15 @@
     if (/^(asl|bsl|lsm|lse|auslan|sign|signs|sign language)$/.test(n) || /sign language|lengua de señas/.test(n)) return 'butter';
     return 'sage';
   }
+  // The chip on a linked entry: its language, or its kind when it has none.
+  // An entry of another kind says so before the language, the way the log
+  // writes entry kickers: "Sound · English".
+  function chipText(e, baseKind) {
+    if (e.language_name) {
+      return (e.kind !== baseKind ? KINDS[e.kind].one + ' · ' : '') + e.language_name;
+    }
+    return KINDS[e.kind].one;
+  }
 
   // ── State ────────────────────────────────────────────────────────────
   function pageFromHash() {
@@ -448,7 +457,7 @@
     return window.RiloInsights.groupConcepts(state.entries);
   }
   function countKind(kind) {
-    return conceptGroups().filter(function (g) { return g.kind === kind; }).length;
+    return conceptGroups().filter(function (g) { return g.kinds.indexOf(kind) !== -1; }).length;
   }
   function byNewest(a, b) { return b.said_on.localeCompare(a.said_on) || b.id - a.id; }
   function languagesUsed() {
@@ -785,8 +794,8 @@
     if (f.indexOf('lang:') === 0) return (e.language_name || 'no language').toLowerCase() === f.slice(5);
     return true;
   }
-  // One card per word: a concept matches when its kind matches a kind
-  // filter, or when any of its languages matches a language, mastery or
+  // One card per word: a concept matches when any of its kinds matches a
+  // kind filter, or when any of its languages matches a language, mastery or
   // month filter, or the search text.
   function selectedConcepts() {
     var q = state.search.trim().toLowerCase();
@@ -794,7 +803,7 @@
       var f = state.filter;
       var match;
       if (f === 'all') match = true;
-      else if (KINDS[f]) match = g.kind === f;
+      else if (KINDS[f]) match = g.kinds.indexOf(f) !== -1;
       else match = g.entries.some(function (e) { return matchesFilter(e, f); });
       if (match && q) {
         match = g.entries.some(function (e) {
@@ -885,13 +894,14 @@
           var osays = o.sounds_like ? (o.kind === 'sign' ? o.sounds_like : '“' + o.sounds_like + '”') : '';
           return '<span class="also-row">' + masteryIcon(masteryOf(o), 20) +
             '<span class="also-word">' + esc(o.label) + '</span>' +
-            '<span class="lang-chip ' + TINT[otone] + ' ' + INK[otone] + '">' + esc(o.language_name || KINDS[o.kind].one) + '</span>' +
+            '<span class="lang-chip ' + TINT[otone] + ' ' + INK[otone] + '">' + esc(chipText(o, e.kind)) + '</span>' +
             (osays ? '<span class="also-says">' + esc(osays) + '</span>' : '') +
             '<span class="also-date">' + esc(o.noticed_unknown ? 'No date' : fmtShort(o.said_on)) + '</span></span>';
         }).join('') + '</span>'
       : '';
     var aria = entryAria(e) + others.map(function (o) {
-      return ', also ' + o.label + (o.language_name ? ' in ' + o.language_name : '') +
+      return ', also ' + o.label + (o.kind !== e.kind ? ' as a ' + KINDS[o.kind].one.toLowerCase() : '') +
+        (o.language_name ? ' in ' + o.language_name : '') +
         ', ' + MASTERY[masteryOf(o)].label;
     }).join('');
     return '<li><button type="button" class="entry-row' + (others.length ? ' concept-row' : '') +
@@ -908,7 +918,7 @@
   function entryConcept(e) {
     return conceptGroups().find(function (g) {
       return g.entries.some(function (x) { return x.id === e.id; });
-    }) || { key: null, kind: e.kind, entries: [e], title: e, first_on: e.said_on };
+    }) || { key: null, kind: e.kind, kinds: [e.kind], entries: [e], title: e, first_on: e.said_on };
   }
   function entryHtml() {
     var e = state.entries.find(function (x) { return x.id === state.entryId; });
@@ -959,16 +969,18 @@
       }).join('') +
 '</section>' +
       (others.length
-        ? '<div class="section-heading" style="padding:0 4px"><h2 class="font-display" style="font-size:20px;font-weight:600">In other languages</h2></div>' +
-          others.map(function (o) { return langBlockHtml(o, name); }).join('')
+        ? '<div class="section-heading" style="padding:0 4px"><h2 class="font-display" style="font-size:20px;font-weight:600">' +
+          (others.some(function (o) { return o.kind !== e.kind; }) ? 'Linked entries' : 'In other languages') + '</h2></div>' +
+          others.map(function (o) { return langBlockHtml(o, name, e.kind); }).join('')
         : '') +
 '<button type="button" class="btn-secondary" data-add-language="' + e.id + '">' + icon('plus', 22, { fill: 'none' }) + 'Add another language</button>' +
 '<button type="button" class="btn-danger" data-delete-entry="' + e.id + '">' + icon('trash', 22) +
       (others.length ? 'Delete ' + esc(e.label) : 'Delete entry') + '</button>';
   }
-  // One other language on the entry: its own word, says, dates, mastery,
-  // journey, Edit and Delete.
-  function langBlockHtml(o, name) {
+  // One other entry on the card: its own word, says, dates, mastery,
+  // journey, Edit and Delete. baseKind is the title's kind, so an entry of
+  // another kind is marked with it.
+  function langBlockHtml(o, name, baseKind) {
     var otone = o.language_name ? langTone(o.language_name) : KINDS[o.kind].tone;
     var olevel = masteryOf(o);
     var osays = o.sounds_like
@@ -978,7 +990,7 @@
       ? o.mastery_history.slice() : [{ level: olevel, on: o.said_on }];
     return '<section class="lang-block">' +
       '<div class="lang-block-top"><span class="lang-chip ' + TINT[otone] + ' ' + INK[otone] + '">' +
-        esc(o.language_name || KINDS[o.kind].one) + '</span>' +
+        esc(chipText(o, baseKind)) + '</span>' +
         '<button type="button" class="pill-btn" data-edit-entry="' + o.id + '">' + icon('edit', 20) + 'Edit</button></div>' +
       '<h3 class="lang-block-word">' + esc(o.label) + '</h3>' +
       '<p class="sub">' + osays + '</p>' +
@@ -1095,7 +1107,7 @@
                 var tone = l.language_name ? langTone(l.language_name) : 'sage';
                 return '<div class="across-lang"><span class="swatch ' + SWATCH[tone] + '"></span>' +
                   '<span class="across-name">' + esc(l.language_name || 'No language') + '</span>' +
-                  '<span class="across-label">' + esc(l.label) + '</span>' +
+                  '<span class="across-label">' + esc(l.label) + (c.kinds.length > 1 ? ' · ' + KINDS[l.kind].one : '') + '</span>' +
                   '<span class="across-stage">' + icon(MASTERY[l.mastery].icon, 20) + MASTERY[l.mastery].label + '</span></div>';
               }).join('') + '</div>';
           }).join('') +
@@ -1524,13 +1536,14 @@
       // begins as emerging.
       mastery: isEdit ? masteryOf(entry) : 'emerging',
       newLang: false,
-      // The concept this language's entry belongs to: null is "on an entry
-      // of its own", a number joins that concept. "Add another language"
-      // opens the sheet already linked.
+      // Linked entries are no longer only languages: "Add another language"
+      // still presets the card, and the sheet's kind can be switched.
       conceptId: isEdit ? (entry.concept_id != null ? entry.concept_id : null)
         : (linkTo != null ? linkTo : null),
       linkOpen: false,
       linkQuery: '',
+      // The typed word whose link suggestion was waved away with Not now.
+      dismissedKey: null,
     };
 
     var content = document.createElement('form');
@@ -1664,15 +1677,15 @@
       });
     }
 
-    // The "Same word in another language" field: linked, a suggestion when
-    // the word typed matches one already logged, or the dashed chip that
-    // opens a searchable list. Rilo never translates or links on its own.
+    // The "Linked entries" field: a suggestion when the word typed matches
+    // one already logged, whatever its kind; the linked card's other entries;
+    // or the dashed chip that opens a searchable list of every word, sound
+    // and sign. Rilo never translates or links on its own.
     function linkArea() {
       var holder = content.querySelector('[data-link-area]');
-      var k = KINDS[form.kind];
       var typed = content.querySelector('[data-label-input]').value.trim();
       var typedKey = foldLabel(typed);
-      var groups = conceptGroups().filter(function (g) { return g.kind === form.kind; });
+      var groups = conceptGroups();
       var own = isEdit
         ? groups.find(function (g) { return g.entries.some(function (x) { return x.id === entry.id; }); })
         : null;
@@ -1680,9 +1693,9 @@
         ? groups.find(function (g) { return g.key === 'c' + form.conceptId; }) : null;
       var others = cur
         ? cur.entries.filter(function (x) { return !isEdit || x.id !== entry.id; }) : [];
-      var label = '<p class="field-label">Same ' + k.one.toLowerCase() + ' in another language <span style="font-weight:400">optional</span></p>';
+      var label = '<p class="field-label">Linked entries <span style="font-weight:400">optional</span></p>';
 
-      // Linked: the word's other languages, with an Unlink that puts this
+      // Linked: the card's other entries, with an Unlink that puts this
       // one back on an entry of its own.
       if (cur && others.length) {
         holder.innerHTML = label +
@@ -1690,7 +1703,7 @@
           others.map(function (o) {
             var t = o.language_name ? langTone(o.language_name) : KINDS[o.kind].tone;
             return '<b>' + esc(o.label) + '</b><span class="lang-chip ' + TINT[t] + ' ' + INK[t] + '">' +
-              esc(o.language_name || KINDS[o.kind].one) + '</span>';
+              esc(chipText(o, form.kind)) + '</span>';
           }).join('') +
           '<span style="flex:1"></span>' +
           '<button type="button" class="link-btn" data-unlink>Unlink</button></div>';
@@ -1702,21 +1715,33 @@
         return;
       }
 
-      // A suggestion: the word typed matches one already logged (capitals
-      // and accents ignored). Linking stays one tap away, never automatic.
-      var suggest = typed && groups.find(function (g) {
+      // A suggestion: the word typed matches one already logged, of any kind
+      // (capitals and accents ignored), a match of the kind being added first.
+      // Linking stays one tap away, never automatic. Not now hides the line
+      // until a different word is typed.
+      var matches = typed ? groups.filter(function (g) {
         if (own && g.key === own.key) return false;
         if (cur && g.key === cur.key) return false;
         return g.entries.some(function (x) { return foldLabel(x.label) === typedKey; });
+      }) : [];
+      matches.sort(function (a, b) {
+        return (a.kinds.indexOf(form.kind) !== -1 ? 0 : 1) - (b.kinds.indexOf(form.kind) !== -1 ? 0 : 1);
       });
-      if (suggest && !form.linkOpen) {
+      var suggest = matches[0];
+      if (suggest && !form.linkOpen && form.dismissedKey !== typedKey) {
         var hit = suggest.entries.find(function (x) { return foldLabel(x.label) === typedKey; });
         var t = hit.language_name ? langTone(hit.language_name) : KINDS[hit.kind].tone;
         holder.innerHTML = label +
           '<div class="link-row"><span>You already have</span><b>' + esc(hit.label) + '</b>' +
-          '<span class="lang-chip ' + TINT[t] + ' ' + INK[t] + '">' + esc(hit.language_name || KINDS[hit.kind].one) + '</span>' +
+          (hit.language_name ? '<span class="lang-chip ' + TINT[t] + ' ' + INK[t] + '">' + esc(hit.language_name) + '</span>' : '') +
+          '<span class="sub">as a ' + KINDS[hit.kind].one.toLowerCase() + '</span>' +
           '<span style="flex:1"></span>' +
+          '<button type="button" class="link-btn" data-link-dismiss>Not now</button>' +
           '<button type="button" class="link-btn" data-link-suggest>Link</button></div>';
+        holder.querySelector('[data-link-dismiss]').addEventListener('click', function () {
+          form.dismissedKey = typedKey;
+          linkArea();
+        });
         holder.querySelector('[data-link-suggest]').addEventListener('click', function () {
           form.conceptId = Number(String(suggest.key).slice(1));
           form.linkOpen = false;
@@ -1725,7 +1750,7 @@
         return;
       }
 
-      // The picker: a short searchable list of this type's entries.
+      // The picker: a short searchable list of every word, sound and sign.
       if (form.linkOpen) {
         var q = foldLabel(form.linkQuery.trim());
         var candidates = groups.filter(function (g) {
@@ -1740,7 +1765,7 @@
         holder.innerHTML = label +
           '<div class="flex flex-col gap-2">' +
           '<input data-link-search class="field" type="search" autocomplete="off" placeholder="Search ' +
-            esc(name) + '’s ' + (form.kind === 'sound' ? 'sounds' : form.kind === 'sign' ? 'signs' : 'words') + '" value="' + esc(form.linkQuery) + '" aria-label="Search entries to link">' +
+            esc(name) + '’s words, sounds and signs" value="' + esc(form.linkQuery) + '" aria-label="Search entries to link">' +
           (candidates.length
             ? '<ul class="entry-list">' + candidates.map(function (g) {
                 var e2 = g.title;
@@ -1749,11 +1774,11 @@
                 return '<li><button type="button" class="entry-row" data-link-pick="' + esc(String(g.key).slice(1)) + '">' +
                   masteryIcon(masteryOf(e2), 26) +
                   '<span class="entry-main"><span class="entry-top"><span class="entry-word" style="font-size:15px">' + esc(e2.label) + '</span>' +
-                  '<span class="lang-chip ' + TINT[t2] + ' ' + INK[t2] + '">' + esc(e2.language_name || KINDS[e2.kind].one) + '</span></span>' +
+                  '<span class="lang-chip ' + TINT[t2] + ' ' + INK[t2] + '">' + esc(chipText(e2, form.kind)) + '</span></span>' +
                   (s2 ? '<span class="entry-note">' + esc(s2) + '</span>' : '') + '</span>' +
                   '<span class="entry-date">' + esc(e2.noticed_unknown ? 'No date' : fmtShort(e2.said_on)) + '</span></button></li>';
               }).join('') + '</ul>'
-            : '<p class="sub">No matching ' + (form.kind === 'sound' ? 'sounds' : form.kind === 'sign' ? 'signs' : 'words') + ' yet.</p>') +
+            : '<p class="sub">No matching entries yet.</p>') +
           '</div>';
         var searchEl = holder.querySelector('[data-link-search]');
         searchEl.addEventListener('input', function () {
@@ -1837,11 +1862,8 @@
           form.langValues = {};
           form.langEdited = {};
         }
-        // A link belongs to one type: switching clears one of another kind.
-        if (form.conceptId != null) {
-          var g = conceptGroups().find(function (x) { return x.key === 'c' + form.conceptId; });
-          if (!g || g.kind !== form.kind) form.conceptId = null;
-        }
+        // A link is no longer tied to one kind: switching Word, Sound and
+        // Sign keeps the entry the parent chose.
         form.linkOpen = false;
         labels();
         chips();
