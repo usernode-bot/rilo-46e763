@@ -312,13 +312,12 @@
   }
   // The creator's ask: once most of the ideas on screen are picked, reveal
   // the next dozen on their own, so a parent tapping through rarely has to
-  // reach for More ideas.
+  // reach for More ideas. The catalogue counts each kind (words, sounds,
+  // signs) on its own, so the signs and sounds grow the list too.
   function autoGrowQuickStart() {
     var ideas = quickIdeas();
     if (state.quickShown >= ideas.length) return;
-    var shown = ideas.slice(0, state.quickShown);
-    var picked = shown.filter(function (idea) { return state.quickPick[idea.id]; }).length;
-    if (picked > shown.length / 2) {
+    if (window.RiloI18n.growsQuickStart(ideas.slice(0, state.quickShown), state.quickPick)) {
       state.quickShown = Math.min(ideas.length, state.quickShown + window.RiloI18n.BATCH);
     }
   }

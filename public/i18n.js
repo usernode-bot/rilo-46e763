@@ -54,7 +54,7 @@
         'Tap a pick’s stage to show how well ' + name + ' says it, like Emerging for “wa” for water.';
     },
     ideasFor: function (name) {
-      return 'Suggested words for kids around ' + name + '.';
+      return 'Suggested words for kids around ' + name + '’s age.';
     },
     moreIdeas: 'More ideas',
     everyIdea: 'That’s every idea for now. Add anything else from Home.',
@@ -678,6 +678,20 @@
 
   var BATCH = 12;
 
+  // True once most of the ideas of one kind on screen are picked, which
+  // reveals the next batch on its own. Each kind counts on its own, so a
+  // parent working through the signs or the sounds grows the list too, not
+  // only one working through the words. `picked` is keyed by idea id.
+  function growsQuickStart(shown, picked) {
+    if (!shown.length) return false;
+    return ['word', 'sound', 'sign'].some(function (kind) {
+      var ofKind = shown.filter(function (idea) { return idea.kind === kind; });
+      if (!ofKind.length) return false;
+      var n = ofKind.filter(function (idea) { return !!(picked && picked[idea.id]); }).length;
+      return n * 2 > ofKind.length;
+    });
+  }
+
   // The band a child of this many whole months is offered first.
   function bandFor(months) {
     if (months < 15) return 12;
@@ -725,5 +739,6 @@
     bandFor: bandFor,
     bandOrder: bandOrder,
     ideasFor: ideasFor,
+    growsQuickStart: growsQuickStart,
   };
 });

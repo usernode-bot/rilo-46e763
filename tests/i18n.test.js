@@ -130,6 +130,25 @@ test('ideas come a dozen at a time, eight words, three sounds and a sign', () =>
   assert.strictEqual(RiloI18n.BATCH, 12);
 });
 
+test('the quick start line names the child\'s age, in both languages', () => {
+  assert.strictEqual(STRINGS.en.ideasFor('Leo'), 'Suggested words for kids around Leo’s age.');
+  assert.strictEqual(STRINGS.es.ideasFor('Leo'), 'Palabras sugeridas para niños de la edad de Leo.');
+});
+
+test('signs and sounds load the next ideas on their own too', () => {
+  const shown = RiloI18n.ideasFor(18).slice(0, 12);
+  const ids = (kind) => shown.filter((i) => i.kind === kind).map((i) => i.id);
+  const pick = (list) => Object.fromEntries(list.map((id) => [id, 'emerging']));
+  // One sign a batch: picking it fills that kind and grows the list.
+  assert.strictEqual(RiloI18n.growsQuickStart(shown, pick(ids('sign'))), true);
+  // Sounds: a majority of the three shown, so two of them.
+  assert.strictEqual(RiloI18n.growsQuickStart(shown, pick(ids('sound').slice(0, 1))), false);
+  assert.strictEqual(RiloI18n.growsQuickStart(shown, pick(ids('sound').slice(0, 2))), true);
+  // Words: a majority of the eight shown, so five of them.
+  assert.strictEqual(RiloI18n.growsQuickStart(shown, pick(ids('word').slice(0, 4))), false);
+  assert.strictEqual(RiloI18n.growsQuickStart(shown, pick(ids('word').slice(0, 5))), true);
+});
+
 test('every message the server can send has a Spanish wording', () => {
   const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const found = new Set();

@@ -2,7 +2,7 @@
 
 A calm, airy first-words tracker for parents: every word, sound and sign a child picks up, in every language spoken at home.
 
-- **Welcome:** the app language (English or Español), the child's name, birth month and year, and the languages at home (English, Spanish, ASL, French or any other), then an optional quick start of common words, sounds and signs matched to the child's age, a dozen at a time, revealing the next dozen on its own once most ideas on screen are picked, and More ideas for the rest.
+- **Welcome:** the app language (English or Español), the child's name, birth month and year, and the languages at home (English, Spanish, ASL, French or any other), then an optional quick start of common words, sounds and signs matched to the child's age, a dozen at a time, revealing the next dozen on its own once most of the words, sounds or signs on screen are picked, and More ideas for the rest.
 - **Home:** a large total of everything the child has (words, sounds and signs together), a "+N this week" pill, the cow mascot, Words / Sounds / Signs tiles and the four most recent entries.
 - **Log:** live search across words, how the child says or signs them, notes and languages; filter chips for kind, each language in use and Mastered; entries grouped by the child's age in months, each with its mastery glyph.
 - **Entry detail:** the word on its language's tint, when it was first noticed and how old the child was, its mastery stage, notes and its journey from stage to stage. Edit opens the add/edit sheet; Delete asks first.
