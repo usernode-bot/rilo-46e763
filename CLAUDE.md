@@ -189,6 +189,24 @@ The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights
   rows are never flagged.
 - The welcome asks for the **languages at home**; each one picked is
   created with `POST /api/languages` right after the child is saved.
+- **Several languages in one add** (issue #20): the add sheet's language
+  chips toggle, and each language after the first gets its own word field
+  (mirroring the big field until edited). `POST /api/entries` takes
+  `also: [{ language_id, label, category }]` (up to 9) and inserts one
+  entry per language into the one concept, sharing the date, mastery and
+  its history; how-it-sounds and notes stay on the first language. Editing
+  stays single-language, and "Add another language" works as before.
+- **"I don't remember"** (`entries.noticed_unknown`, added with
+  `ADD COLUMN IF NOT EXISTS`): the date is optional. An undated first keeps
+  `said_on` as a sort-only day (`max(serverToday, birthday)`, never shown),
+  appears in a last "Date not remembered" log group after "Already
+  learned", and reads "Date not remembered" on its entry page and journey.
+  Totals, by-language and mastery count it; growth, this week and this
+  month do not, and Insights says how many are left out. An empty date
+  means the same, and a save with a date clears the flag. `validateEntry()`
+  skips the date checks when it is true; PATCH writes back the current
+  day and clears `already_learned`. No backfill: existing rows stay
+  `false`.
 - **Sounds are animals AND things** (the creator's ask: car vroom,
   ambulance wee-o, horn beep beep) — the kind is labelled "Sound", the
   quick-start group is "Sounds", and its prompt asks for "the animal or

@@ -747,7 +747,7 @@
       (e.sounds_like ? ', ' + e.sounds_like : '') +
       (e.language_name ? ', ' + e.language_name : '') +
       ', ' + MASTERY[masteryOf(e)].label + ', ' +
-      (e.already_learned ? 'already learned' : fmtLong(e.said_on));
+      (e.already_learned ? 'already learned' : e.noticed_unknown ? 'date not remembered' : fmtLong(e.said_on));
   }
 
   function recentRowHtml(e) {
@@ -759,7 +759,7 @@
       '<span class="entry-main"><span class="entry-top"><span class="entry-word">' + esc(e.label) + '</span>' +
         '<span class="entry-kicker ' + INK[tone] + '">' + KINDS[e.kind].one + (e.language_name ? ' · ' + esc(e.language_name) : '') + '</span></span>' +
         (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + '</span>' +
-      '<span class="entry-side"><span class="' + (e.already_learned ? 'learned-badge">Already learned' : 'entry-date">' + esc(fmtShort(e.said_on))) + '</span>' +
+      '<span class="entry-side"><span class="' + (e.already_learned ? 'learned-badge">Already learned' : e.noticed_unknown ? 'learned-badge">No date' : 'entry-date">' + esc(fmtShort(e.said_on))) + '</span>' +
         '<span class="' + M_PILL[level] + '">' + MASTERY[level].label + '</span></span>' +
       '</button></li>';
   }
@@ -781,7 +781,7 @@
     if (f === 'all') return true;
     if (KINDS[f]) return e.kind === f;
     if (MASTERY[f]) return masteryOf(e) === f;
-    if (f === 'month') return !e.already_learned && e.said_on.slice(0, 7) === todayIso().slice(0, 7);
+    if (f === 'month') return !e.already_learned && !e.noticed_unknown && e.said_on.slice(0, 7) === todayIso().slice(0, 7);
     if (f.indexOf('lang:') === 0) return (e.language_name || 'no language').toLowerCase() === f.slice(5);
     return true;
   }
@@ -844,10 +844,13 @@
     // noticed; each language under it keeps its own date.
     var groups = new Map();
     var learned = [];
+    var undated = [];
     rows.forEach(function (g) {
       // Quick-start picks are not dated firsts: they gather in their own
-      // "Already learned" group at the bottom of the log.
+      // "Already learned" group at the bottom of the log. Firsts with no
+      // remembered date sit in a group of their own after it.
       if (g.already_learned) { learned.push(g); return; }
+      if (g.undated) { undated.push(g); return; }
       var age = ageMonths(state.child.birthday, g.first_on);
       if (!groups.has(age)) groups.set(age, []);
       groups.get(age).push(g);
@@ -864,6 +867,11 @@
         '<span>' + learned.length + (learned.length === 1 ? ' entry' : ' entries') + '</span></div>' +
         '<ul class="entry-list">' + learned.map(logRowHtml).join('') + '</ul></section>';
     }
+    if (undated.length) {
+      html += '<section class="age-group"><div class="age-heading"><h2>Date not remembered</h2>' +
+        '<span>' + undated.length + (undated.length === 1 ? ' entry' : ' entries') + '</span></div>' +
+        '<ul class="entry-list">' + undated.map(logRowHtml).join('') + '</ul></section>';
+    }
     return html;
   }
   function logRowHtml(g) {
@@ -879,7 +887,7 @@
             '<span class="also-word">' + esc(o.label) + '</span>' +
             '<span class="lang-chip ' + TINT[otone] + ' ' + INK[otone] + '">' + esc(o.language_name || KINDS[o.kind].one) + '</span>' +
             (osays ? '<span class="also-says">' + esc(osays) + '</span>' : '') +
-            '<span class="also-date">' + esc(fmtShort(o.said_on)) + '</span></span>';
+            '<span class="also-date">' + esc(o.noticed_unknown ? 'No date' : fmtShort(o.said_on)) + '</span></span>';
         }).join('') + '</span>'
       : '';
     var aria = entryAria(e) + others.map(function (o) {
@@ -893,7 +901,7 @@
         '<span class="lang-chip ' + TINT[tone] + ' ' + INK[tone] + '">' + esc(e.language_name || KINDS[e.kind].one) + '</span>' +
         (e.is_demo ? '<span class="lang-chip tint-sage ink-sage">Staging demo</span>' : '') + '</span>' +
         (note ? '<span class="entry-note">' + esc(note) + '</span>' : '') + also + '</span>' +
-      (g.already_learned ? '' : '<span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span>') + '</button></li>';
+      (g.already_learned || g.undated ? '' : '<span class="entry-date">' + esc(fmtShort(e.said_on)) + '</span>') + '</button></li>';
   }
 
   // ── Entry detail ─────────────────────────────────────────────────────
@@ -918,7 +926,8 @@
     var level = masteryOf(e);
     var says = e.sounds_like
       ? (e.kind === 'sign' ? esc(name) + ' signs it: ' + esc(e.sounds_like) : esc(name) + ' says <i>“' + esc(e.sounds_like) + '”</i>')
-      : e.already_learned ? 'Already learned' : 'Noticed ' + esc(fmtLong(e.said_on));
+      : e.already_learned ? 'Already learned'
+      : e.noticed_unknown ? 'Date not remembered' : 'Noticed ' + esc(fmtLong(e.said_on));
     var history = Array.isArray(e.mastery_history) && e.mastery_history.length
       ? e.mastery_history.slice() : [{ level: level, on: e.said_on }];
     var age = formatAge(ageMonths(state.child.birthday, e.said_on), name);
@@ -932,7 +941,8 @@
 '</section>' +
 '<dl class="info-card">' +
 '  <div class="info-row"><dt>First noticed</dt><dd>' +
-        (e.already_learned ? '<span class="learned-badge">Already learned</span>' : esc(fmtFull(e.said_on)) + ' · ' + esc(age)) + '</dd></div>' +
+        (e.already_learned ? '<span class="learned-badge">Already learned</span>'
+          : e.noticed_unknown ? 'Date not remembered' : esc(fmtFull(e.said_on)) + ' · ' + esc(age)) + '</dd></div>' +
 '  <div class="info-row"><dt>Mastery</dt><dd>' + icon(MASTERY[level].icon, 26) + MASTERY[level].label + '</dd></div>' +
       (e.note ? '<div class="info-block"><dt>Notes</dt><dd>' + esc(e.note) + '</dd></div>' : '') +
       (e.is_demo ? '<div class="info-row"><dt>Source</dt><dd>Staging demo</dd></div>' : '') +
@@ -942,8 +952,9 @@
         var m = MASTERY[step.level] || MASTERY.emerging;
         // The journey's first step of an already-learned entry has no day:
         // later stage changes keep their real dates.
-        var when = e.already_learned && i === history.length - 1
-          ? 'Already learned' : fmtShort(step.on);
+        var when = i === history.length - 1 && e.already_learned
+          ? 'Already learned' : i === history.length - 1 && e.noticed_unknown
+          ? 'Date not remembered' : fmtShort(step.on);
         return '<div class="journey-step">' + icon(m.icon, 34) + '<div><b>' + m.label + '</b> <span>· ' + esc(when) + '</span></div></div>';
       }).join('') +
 '</section>' +
@@ -962,7 +973,7 @@
     var olevel = masteryOf(o);
     var osays = o.sounds_like
       ? (o.kind === 'sign' ? esc(name) + ' signs it: ' + esc(o.sounds_like) : esc(name) + ' says <i>“' + esc(o.sounds_like) + '”</i>')
-      : 'Noticed ' + esc(fmtLong(o.said_on));
+      : o.noticed_unknown ? 'Date not remembered' : 'Noticed ' + esc(fmtLong(o.said_on));
     var ohistory = Array.isArray(o.mastery_history) && o.mastery_history.length
       ? o.mastery_history.slice() : [{ level: olevel, on: o.said_on }];
     return '<section class="lang-block">' +
@@ -972,13 +983,15 @@
       '<h3 class="lang-block-word">' + esc(o.label) + '</h3>' +
       '<p class="sub">' + osays + '</p>' +
       '<dl class="flex flex-col">' +
-        '<div class="info-row"><dt>First noticed</dt><dd>' + esc(fmtFull(o.said_on)) + ' · ' +
-          esc(formatAge(ageMonths(state.child.birthday, o.said_on), name)) + '</dd></div>' +
+        '<div class="info-row"><dt>First noticed</dt><dd>' +
+          (o.noticed_unknown ? 'Date not remembered' : esc(fmtFull(o.said_on)) + ' · ' +
+          esc(formatAge(ageMonths(state.child.birthday, o.said_on), name))) + '</dd></div>' +
         '<div class="info-row"><dt>Mastery</dt><dd>' + icon(MASTERY[olevel].icon, 26) + MASTERY[olevel].label + '</dd></div>' +
       '</dl>' +
-      ohistory.slice().reverse().map(function (step) {
+      ohistory.slice().reverse().map(function (step, i) {
         var m = MASTERY[step.level] || MASTERY.emerging;
-        return '<div class="journey-step">' + icon(m.icon, 30) + '<div><b>' + m.label + '</b> <span>· ' + esc(fmtShort(step.on)) + '</span></div></div>';
+        var when = i === ohistory.length - 1 && o.noticed_unknown ? 'Date not remembered' : fmtShort(step.on);
+        return '<div class="journey-step">' + icon(m.icon, 30) + '<div><b>' + m.label + '</b> <span>· ' + esc(when) + '</span></div></div>';
       }).join('') +
       '<button type="button" class="btn-danger" data-delete-entry="' + o.id + '">' + icon('trash', 22) + 'Delete ' + esc(o.label) + '</button>' +
       '</section>';
@@ -1045,6 +1058,8 @@
       }).join('') + '</div>' +
       (baselineMonth ? '<p class="fine-print">Started with ' + baselineMonth.baseline + ' already learned in ' +
         MONTH_NAMES[Number(baselineMonth.key.slice(5)) - 1] + '.</p>' : '') +
+      (data.undated ? '<p class="fine-print">' + data.undated + ' with no date ' +
+        (data.undated === 1 ? 'counts' : 'count') + ' in the total, not in the chart.</p>' : '') +
       (byWeek
         ? '<details class="chart-table"><summary>Week by week</summary><table><thead><tr><th>Week of</th><th>New</th><th>Total</th></tr></thead><tbody>' +
           data.weeks.slice().reverse().map(function (w) {
@@ -1491,10 +1506,20 @@
     if (!state.child) return;
     var isEdit = !!entry;
     var kind = isEdit ? entry.kind : (presetKind || 'word');
+    var initialLang = presetLangId != null ? presetLangId : defaultLanguageId(kind);
     var form = {
       kind: kind,
-      languageId: isEdit ? (entry.language_id || null)
-        : (presetLangId != null ? presetLangId : defaultLanguageId(kind)),
+      languageId: isEdit ? (entry.language_id || null) : initialLang,
+      // Adding can pick several languages, in the order they were picked;
+      // the first one's word goes in the big field.
+      languageIds: isEdit ? [] : (initialLang != null ? [initialLang] : []),
+      multi: !isEdit,
+      // Each extra language's own word, until the parent changes it (an
+      // untouched one follows the big field).
+      langValues: {},
+      langEdited: {},
+      // "I don't remember": saved with no date at all.
+      noticedUnknown: isEdit ? entry.noticed_unknown === true : false,
       // A first is usually only partly there at the start, so a new one
       // begins as emerging.
       mastery: isEdit ? masteryOf(entry) : 'emerging',
@@ -1518,9 +1543,18 @@
     var errEl = content.querySelector('[data-form-error]');
     var name = state.child.name;
 
+    function pickedIds() {
+      return isEdit ? (form.languageId != null ? [form.languageId] : []) : form.languageIds;
+    }
+    function langName(id) {
+      var l = state.languages.find(function (x) { return x.id === id; });
+      return l ? l.name : '';
+    }
     function labels() {
       var k = KINDS[form.kind];
-      content.querySelector('[data-label-the]').textContent = k.the;
+      var ids = pickedIds();
+      content.querySelector('[data-label-the]').textContent = (!isEdit && ids.length > 1)
+        ? k.the + ' in ' + langName(ids[0]) : k.the;
       content.querySelector('[data-label-input]').placeholder = k.eg;
       content.querySelector('[data-label-how]').innerHTML = esc(k.how(name)) + ' <span style="font-weight:400">optional</span>';
       content.querySelector('[data-how-input]').placeholder = k.hint;
@@ -1531,6 +1565,30 @@
         btn.classList.toggle('on', on);
         btn.setAttribute('aria-checked', String(on));
         btn.innerHTML = icon(KINDS[key].icon, 22, { fill: on ? KINDS[key].tone : 'none' }) + KINDS[key].one;
+      });
+    }
+
+    // A word field for every language after the first, filled with what was
+    // typed above until the parent changes it.
+    function extraWords() {
+      var holder = content.querySelector('[data-lang-words]');
+      if (!holder) return;
+      var big = content.querySelector('[data-label-input]');
+      var ids = !isEdit ? pickedIds().slice(1) : [];
+      var k = KINDS[form.kind];
+      holder.innerHTML = ids.map(function (id) {
+        var l = state.languages.find(function (x) { return x.id === id; });
+        var value = form.langEdited[id] ? (form.langValues[id] || '') : big.value;
+        return '<div class="mt-3"><label class="field-label" for="word-lang-' + id + '">' +
+          esc(k.the + ' in ' + (l ? l.name : '')) + '</label>' +
+          '<input id="word-lang-' + id + '" data-lang-word="' + id + '" class="field" type="text" maxlength="60" autocomplete="off" value="' + esc(value) + '"></div>';
+      }).join('');
+      holder.querySelectorAll('[data-lang-word]').forEach(function (input) {
+        input.addEventListener('input', function () {
+          var id = Number(input.getAttribute('data-lang-word'));
+          form.langEdited[id] = true;
+          form.langValues[id] = input.value;
+        });
       });
     }
 
@@ -1562,9 +1620,12 @@
               state.languages.push(Object.assign({ uses: 0, is_demo: false }, lang));
               state.sessionLangs.push(lang.id);
             }
-            form.languageId = lang.id;
+            if (form.multi) form.languageIds.push(lang.id);
+            else form.languageId = lang.id;
             form.newLang = false;
             chips();
+            labels();
+            extraWords();
           } catch (err) {
             toast(err.code === 'account_required' ? 'Make an account to keep entries.' : (err.message || 'Could not add the language.'));
           }
@@ -1575,12 +1636,26 @@
         });
         return;
       }
-      holder.innerHTML = '<div class="chips-row" role="radiogroup" aria-label="Language">' + chipListHtml(form) + '</div>';
+      if (isEdit) {
+        holder.innerHTML = '<div class="chips-row" role="radiogroup" aria-label="Language">' + chipListHtml(form) + '</div>';
+      } else {
+        holder.innerHTML = '<div class="chips-row" role="group" aria-label="Languages">' + chipListHtml(form) + '</div>';
+      }
       holder.querySelectorAll('[data-lang]').forEach(function (chip) {
         chip.addEventListener('click', function () {
           var id = Number(chip.getAttribute('data-lang'));
-          form.languageId = form.languageId === id ? null : id;
+          if (isEdit) {
+            form.languageId = form.languageId === id ? null : id;
+          } else if (form.languageIds.indexOf(id) !== -1) {
+            form.languageIds = form.languageIds.filter(function (x) { return x !== id; });
+            delete form.langValues[id];
+            delete form.langEdited[id];
+          } else {
+            form.languageIds.push(id);
+          }
           chips();
+          labels();
+          extraWords();
         });
       });
       holder.querySelector('[data-new-lang]').addEventListener('click', function () {
@@ -1676,7 +1751,7 @@
                   '<span class="entry-main"><span class="entry-top"><span class="entry-word" style="font-size:15px">' + esc(e2.label) + '</span>' +
                   '<span class="lang-chip ' + TINT[t2] + ' ' + INK[t2] + '">' + esc(e2.language_name || KINDS[e2.kind].one) + '</span></span>' +
                   (s2 ? '<span class="entry-note">' + esc(s2) + '</span>' : '') + '</span>' +
-                  '<span class="entry-date">' + esc(fmtShort(e2.said_on)) + '</span></button></li>';
+                  '<span class="entry-date">' + esc(e2.noticed_unknown ? 'No date' : fmtShort(e2.said_on)) + '</span></button></li>';
               }).join('') + '</ul>'
             : '<p class="sub">No matching ' + (form.kind === 'sound' ? 'sounds' : form.kind === 'sign' ? 'signs' : 'words') + ' yet.</p>') +
           '</div>';
@@ -1709,6 +1784,11 @@
 
     function ageHint() {
       var hint = content.querySelector('[data-age-hint]');
+      if (form.noticedUnknown) {
+        hint.textContent = 'Saved without a date. It goes in Date not remembered in the log.';
+        hint.hidden = false;
+        return;
+      }
       var value = content.querySelector('[data-date]').value;
       if (!value) { hint.hidden = true; return; }
       // An already-learned entry keeps its note while its date is unchanged;
@@ -1722,18 +1802,41 @@
       hint.hidden = false;
     }
 
+    function dateState() {
+      var chip = content.querySelector('[data-noticed-unknown]');
+      var input = content.querySelector('[data-date]');
+      var on = form.noticedUnknown;
+      chip.classList.toggle('chip-on', on);
+      chip.setAttribute('aria-pressed', String(on));
+      if (input) input.hidden = on;
+      ageHint();
+    }
+
     labels();
     chips();
     mastery();
-    ageHint();
+    extraWords();
+    dateState();
     linkArea();
 
-    content.querySelector('[data-label-input]').addEventListener('input', linkArea);
+    content.querySelector('[data-label-input]').addEventListener('input', function () {
+      content.querySelectorAll('[data-lang-word]').forEach(function (input) {
+        var id = Number(input.getAttribute('data-lang-word'));
+        if (!form.langEdited[id]) input.value = content.querySelector('[data-label-input]').value;
+      });
+      linkArea();
+    });
     content.querySelector('[data-cancel]').addEventListener('click', function () { sheet.dismiss(); });
     content.querySelectorAll('[data-kind]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         form.kind = btn.getAttribute('data-kind');
-        if (!isEdit) form.languageId = defaultLanguageId(form.kind);
+        if (!isEdit) {
+          var next = defaultLanguageId(form.kind);
+          form.languageId = next;
+          form.languageIds = next != null ? [next] : [];
+          form.langValues = {};
+          form.langEdited = {};
+        }
         // A link belongs to one type: switching clears one of another kind.
         if (form.conceptId != null) {
           var g = conceptGroups().find(function (x) { return x.key === 'c' + form.conceptId; });
@@ -1742,6 +1845,7 @@
         form.linkOpen = false;
         labels();
         chips();
+        extraWords();
         linkArea();
       });
     });
@@ -1751,34 +1855,62 @@
         mastery();
       });
     });
-    content.querySelector('[data-date]').addEventListener('change', ageHint);
+    content.querySelector('[data-date]').addEventListener('change', function () {
+      if (content.querySelector('[data-date]').value) form.noticedUnknown = false;
+      dateState();
+    });
+    content.querySelector('[data-noticed-unknown]').addEventListener('click', function () {
+      form.noticedUnknown = !form.noticedUnknown;
+      dateState();
+    });
 
     content.addEventListener('submit', async function (event) {
       event.preventDefault();
       errEl.hidden = true;
+      var ids = pickedIds();
       var payload = {
         kind: form.kind,
         label: content.querySelector('[data-label-input]').value,
         sounds_like: content.querySelector('[data-how-input]').value,
-        language_id: form.languageId,
+        language_id: ids.length ? ids[0] : null,
         said_on: content.querySelector('[data-date]').value,
         note: content.querySelector('[data-note]').value,
         mastery: form.mastery,
         mastered: form.mastery === 'mastered',
       };
+      var extras = [];
+      if (payload.said_on === '' || form.noticedUnknown) {
+        payload.noticed_unknown = true;
+        payload.said_on = null;
+      }
       if (!payload.label.trim()) {
         errEl.textContent = form.kind === 'sound' ? 'Name the animal or thing.' : form.kind === 'sign' ? 'Write what the sign means.' : 'Write the word.';
         errEl.hidden = false;
         return;
       }
-      if (!payload.said_on) {
-        errEl.textContent = 'Pick a date.';
+      if (!payload.noticed_unknown && !payload.said_on) {
+        errEl.textContent = "Pick a date, or choose I don't remember.";
         errEl.hidden = false;
         return;
+      }
+      // Every other picked language gets its own first on the same card,
+      // with the word typed for it.
+      if (!isEdit && ids.length > 1) {
+        for (var i = 1; i < ids.length; i++) {
+          var field = content.querySelector('[data-lang-word="' + ids[i] + '"]');
+          var word = field ? field.value.trim() : '';
+          if (!word) {
+            errEl.textContent = 'Write the word in ' + langName(ids[i]) + '.';
+            errEl.hidden = false;
+            return;
+          }
+          extras.push({ language_id: ids[i], label: word, category: inferCategory(word) });
+        }
       }
       // The category follows the word itself, so it is not a field the
       // parent fills in.
       payload.category = inferCategory(payload.label);
+      if (extras.length) payload.also = extras;
       // Linking: an edit always says where the language lives; a new add
       // only when it was linked to one.
       if (isEdit) payload.concept_id = form.conceptId;
@@ -1792,7 +1924,7 @@
           await api('/api/entries', { method: 'POST', body: JSON.stringify(payload) });
         }
         sheet.dismiss();
-        toast(isEdit ? 'Saved' : 'Added ' + payload.label.trim());
+        toast(isEdit ? 'Saved' : 'Added ' + joinNames([payload.label.trim()].concat(extras.map(function (x) { return x.label; }))));
         refreshState().catch(function () {});
       } catch (err) {
         showFormError(errEl, err);
@@ -1820,8 +1952,13 @@
 '  <input id="entry-label" data-label-input class="big-input" type="text" maxlength="60" autocomplete="off" value="' + (isEdit ? esc(entry.label) : '') + '">' +
 '</div>' +
 '<div class="mt-4" data-link-area></div>' +
-'<div class="mt-4"><p class="field-label" id="lang-label">Language <span style="font-weight:400">optional</span></p><div data-lang-area></div></div>' +
-'<div class="mt-4"><label class="field-label" for="entry-date" style="display:flex;align-items:center;gap:6px">' + icon('calendar', 20) + 'First noticed</label>' +
+'<div class="mt-4"><p class="field-label" id="lang-label">' + (isEdit ? 'Language' : 'Languages') + ' <span style="font-weight:400">optional</span></p><div data-lang-area></div>' +
+  (isEdit ? '' : '<p class="sub" style="font-size:13px;margin-top:6px">Pick more than one if ' + esc(name) + ' uses it in each.</p>') +
+'</div>' +
+(isEdit ? '' : '<div data-lang-words></div>') +
+'<div class="mt-4"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">' +
+'  <label class="field-label" for="entry-date" style="display:flex;align-items:center;gap:6px;margin:0">' + icon('calendar', 20) + 'First noticed <span style="font-weight:400">optional</span></label>' +
+'  <button type="button" class="chip" data-noticed-unknown aria-pressed="false">I don\'t remember</button></div>' +
 '  <input id="entry-date" data-date class="field" type="date" value="' + (isEdit ? esc(entry.said_on) : today) +
      '" min="' + esc(state.child.birthday) + '" max="' + today + '">' +
 '  <p data-age-hint class="sub mt-1" style="font-size:13px"></p></div>' +
@@ -1845,8 +1982,9 @@
   function chipListHtml(form) {
     var list = state.languages.slice().sort(function (a, b) { return b.uses - a.uses || a.name.localeCompare(b.name); });
     return list.map(function (l) {
-      var on = form.languageId === l.id;
-      return '<button type="button" role="radio" aria-checked="' + on + '" class="chip' + (on ? ' ' + LANG_ON[langTone(l.name)] : '') +
+      var on = form.multi ? form.languageIds.indexOf(l.id) !== -1 : form.languageId === l.id;
+      var state = form.multi ? 'aria-pressed="' + on + '"' : 'role="radio" aria-checked="' + on + '"';
+      return '<button type="button" ' + state + ' class="chip' + (on ? ' ' + LANG_ON[langTone(l.name)] : '') +
         '" data-lang="' + l.id + '">' + esc(l.name) + '</button>';
     }).join('') +
       '<button type="button" class="chip chip-dashed" data-new-lang>+ New language</button>';

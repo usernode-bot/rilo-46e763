@@ -174,3 +174,45 @@ test('weeks stay eight with no entries, and the week starts on Monday', () => {
   // Sunday today: the week still starts the Monday before.
   assert.equal(summarize([], '2026-10-11').weeks[7].start, '2026-10-05');
 });
+
+test('a card with only undated firsts is undated, not already learned', () => {
+  const groups = groupConcepts([
+    { id: 1, kind: 'word', label: 'agua', concept_id: 4, said_on: '2026-10-20', language_name: 'Spanish', noticed_unknown: true },
+    { id: 2, kind: 'word', label: 'water', concept_id: 4, said_on: '2026-10-20', language_name: 'English', noticed_unknown: true },
+  ]);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].undated, true);
+  assert.equal(groups[0].already_learned, false);
+});
+
+test('a card with one dated language is filed at that day', () => {
+  const groups = groupConcepts([
+    { id: 1, kind: 'word', label: 'water', concept_id: 4, said_on: '2026-05-03', language_name: 'English' },
+    { id: 2, kind: 'word', label: 'agua', concept_id: 4, said_on: '2026-10-20', language_name: 'Spanish', noticed_unknown: true },
+  ]);
+  assert.equal(groups[0].undated, false);
+  assert.equal(groups[0].first_on, '2026-05-03');
+});
+
+test('undated firsts count in totals but stay out of growth and this week', () => {
+  const data = summarize([
+    { id: 1, kind: 'word', label: 'water', concept_id: 4, said_on: '2026-10-05', language_name: 'English', mastery: 'mastered' },
+    { id: 2, kind: 'word', label: 'agua', concept_id: 4, said_on: '2026-10-20', language_name: 'Spanish', noticed_unknown: true, mastery: 'emerging' },
+    { id: 3, kind: 'word', label: 'dog', concept_id: 5, said_on: '2026-10-20', language_name: 'English', noticed_unknown: true, mastery: 'practicing' },
+  ], '2026-10-21');
+  // The mixed card counts once at its dated day; the undated card counts once
+  // in the total only.
+  assert.equal(data.total, 2);
+  assert.equal(data.undated, 1);
+  assert.equal(data.thisWeek, 0);
+  assert.equal(data.thisMonth.length, 1);
+  assert.deepEqual(data.growth.slice(-2).map(m => [m.key, m.added, m.total]),
+    [['2026-09', 0, 0], ['2026-10', 1, 1]]);
+  assert.ok(data.weeks.every(w => w.added === 0 && w.baseline === 0 && w.total === 0 ||
+    w.total === 1));
+  assert.equal(data.weeks[7].total, 1);
+  // Languages and mastery count every entry, dated or not.
+  assert.deepEqual(data.byLanguage.map(l => [l.name, l.count]),
+    [['English', 2], ['Spanish', 1]]);
+  assert.deepEqual(data.mastery, { emerging: 1, practicing: 1, mastered: 1 });
+});
