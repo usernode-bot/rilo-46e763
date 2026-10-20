@@ -212,7 +212,7 @@ const ENTRY_SELECT = `
   SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id, e.concept_id,
          e.category, e.mastered, e.mastery, e.mastery_history,
          e.said_on::text AS said_on, e.note, e.is_demo, e.already_learned,
-         l.name AS language_name
+         e.noticed_unknown, l.name AS language_name
   FROM entries e LEFT JOIN languages l ON l.id = e.language_id
   WHERE e.id = $1 AND e.owner_id = $2`;
 
@@ -265,7 +265,7 @@ app.get('/api/state', wrap(async (req, res) => {
     `SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id, e.concept_id,
             e.category, e.mastered, e.mastery, e.mastery_history,
             e.said_on::text AS said_on, e.note, e.is_demo, e.already_learned,
-            l.name AS language_name
+            e.noticed_unknown, l.name AS language_name
      FROM entries e LEFT JOIN languages l ON l.id = e.language_id
      WHERE e.owner_id = $1
      ORDER BY e.said_on DESC, e.id DESC`,
@@ -358,9 +358,13 @@ async function validateEntry(req, res, ownerId) {
     res.status(400).json({ error: 'Keep the note under 280 characters.' });
     return null;
   }
-  const said_on = validDate(req.body.said_on);
-  if (!said_on) {
-    res.status(400).json({ error: 'Pick a date.' });
+  // "I don't remember" saves a first with no date. An empty date means the
+  // same, so a missing date is no longer an error of its own.
+  const noticed_unknown = req.body.noticed_unknown === true ||
+    (req.body.said_on == null || req.body.said_on === '');
+  const said_on = noticed_unknown ? null : validDate(req.body.said_on);
+  if (!noticed_unknown && !said_on) {
+    res.status(400).json({ error: "Pick a date, or choose I don't remember." });
     return null;
   }
   const child = await pool.query(
@@ -370,11 +374,12 @@ async function validateEntry(req, res, ownerId) {
     res.status(400).json({ error: "Add your child's name and birthday first." });
     return null;
   }
-  if (said_on < child.rows[0].birthday) {
+  const birthday = child.rows[0].birthday;
+  if (said_on && said_on < birthday) {
     res.status(400).json({ error: 'Pick a date on or after the birthday.' });
     return null;
   }
-  if (said_on > latestAllowedDay(req.now)) {
+  if (said_on && said_on > latestAllowedDay(req.now)) {
     res.status(400).json({ error: 'Pick a date no later than today.' });
     return null;
   }
@@ -423,6 +428,8 @@ async function validateEntry(req, res, ownerId) {
     note: note || null,
     language_id,
     said_on,
+    noticed_unknown,
+    birthday,
     category: validCategory(req.body.category),
     mastery: validMastery(req.body),
     concept_id,
@@ -437,8 +444,45 @@ app.post('/api/entries', wrap(async (req, res) => {
   if (values.concept_id != null && values.concept_kind !== values.kind) {
     return res.status(400).json({ error: 'Link it to an entry of the same type.' });
   }
+  // Several languages in one add: the extra languages join the same card.
+  const alsoBody = req.body.also;
+  const alsoRaw = Array.isArray(alsoBody) ? alsoBody : [];
+  if (alsoRaw.length > 9) {
+    return res.status(400).json({ error: 'Add up to 10 languages at a time.' });
+  }
+  const extras = [];
+  if (alsoRaw.length) {
+    if (values.language_id == null) {
+      return res.status(400).json({ error: 'Choose one of your languages.' });
+    }
+    const seen = new Set([values.language_id]);
+    for (const item of alsoRaw) {
+      const languageId = item && item.language_id != null ? Number(item.language_id) : NaN;
+      if (!Number.isInteger(languageId) || seen.has(languageId)) {
+        return res.status(400).json({ error: 'Choose one of your languages.' });
+      }
+      seen.add(languageId);
+      const owned = await pool.query(
+        'SELECT 1 FROM languages WHERE id = $1 AND owner_id = $2',
+        [languageId, ownerId]);
+      if (!owned.rows.length) {
+        return res.status(400).json({ error: 'Choose one of your languages.' });
+      }
+      const extraLabel = typeof item.label === 'string' ? item.label.trim() : '';
+      if (extraLabel.length < 1 || extraLabel.length > 60) {
+        return res.status(400).json({ error: 'Write the word in each language.' });
+      }
+      extras.push({ language_id: languageId, label: extraLabel, category: validCategory(item.category) });
+    }
+  }
+  // An undated first keeps a sort-only day that is never shown, never
+  // earlier than the birthday.
+  const today = serverToday(req.now);
+  const saidOn = values.noticed_unknown
+    ? (today < values.birthday ? values.birthday : today)
+    : values.said_on;
   // The journey starts on the day it was first noticed, at the stage chosen.
-  const history = JSON.stringify([{ level: values.mastery, on: values.said_on }]);
+  const history = JSON.stringify([{ level: values.mastery, on: saidOn }]);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -453,12 +497,25 @@ app.post('/api/entries', wrap(async (req, res) => {
     }
     const inserted = await client.query(
       `INSERT INTO entries (owner_id, kind, label, sounds_like, language_id, said_on, note,
-                            category, mastered, mastery, mastery_history, concept_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)
+                            category, mastered, mastery, mastery_history, concept_id,
+                            noticed_unknown)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13)
        RETURNING id`,
       [ownerId, values.kind, values.label, values.sounds_like, values.language_id,
-       values.said_on, values.note, values.category, values.mastery === 'mastered',
-       values.mastery, history, conceptId]);
+       saidOn, values.note, values.category, values.mastery === 'mastered',
+       values.mastery, history, conceptId, values.noticed_unknown]);
+    // Every extra language joins the same card, with the same date and
+    // stage. How it sounds and the note stay on the first language only.
+    for (const extra of extras) {
+      await client.query(
+        `INSERT INTO entries (owner_id, kind, label, sounds_like, language_id, said_on, note,
+                              category, mastered, mastery, mastery_history, concept_id,
+                              noticed_unknown)
+         VALUES ($1, $2, $3, NULL, $4, $5, NULL, $6, $7, $8, $9::jsonb, $10, $11)`,
+        [ownerId, values.kind, extra.label, extra.language_id, saidOn, extra.category,
+         values.mastery === 'mastered', values.mastery, history, conceptId,
+         values.noticed_unknown]);
+    }
     // Same client as the INSERT: the row is not committed yet, so a pool
     // query would not see it.
     const row = await client.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
@@ -550,7 +607,7 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
   try {
     await client.query('BEGIN');
     const owned = await client.query(
-      'SELECT mastery, kind, concept_id FROM entries WHERE id = $1 AND owner_id = $2',
+      'SELECT mastery, kind, concept_id, said_on::text AS said_on FROM entries WHERE id = $1 AND owner_id = $2',
       [id, ownerId]);
     if (!owned.rows.length) {
       await client.query('ROLLBACK');
@@ -620,10 +677,13 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
     // A change of stage is a step on the word's journey, dated today (the
     // request's own "now", so a staging preview's chosen moment rules it).
     // A first never earlier than the day it was first noticed.
+    // Choosing "I don't remember" on an edit keeps the sort-only day the row
+    // already has, and turns an already-learned pick into an undated first.
     const changed = current.mastery !== values.mastery;
     const today = serverToday(req.now);
+    const saidOn = values.noticed_unknown ? current.said_on : values.said_on;
     const step = JSON.stringify([{
-      level: values.mastery, on: today < values.said_on ? values.said_on : today,
+      level: values.mastery, on: today < saidOn ? saidOn : today,
     }]);
     await client.query(
       `UPDATE entries
@@ -632,12 +692,14 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
            mastery_history = CASE WHEN $10::boolean
              THEN mastery_history || $11::jsonb ELSE mastery_history END,
            concept_id = $12,
-           already_learned = already_learned AND said_on = $5,
+           already_learned = CASE WHEN $15::boolean
+             THEN false ELSE already_learned AND said_on = $5 END,
+           noticed_unknown = $15::boolean,
            updated_at = NOW()
        WHERE id = $13 AND owner_id = $14`,
       [values.kind, values.label, values.sounds_like, values.language_id,
-       values.said_on, values.note, values.category, values.mastery === 'mastered',
-       values.mastery, changed, step, conceptId, id, ownerId]);
+       saidOn, values.note, values.category, values.mastery === 'mastered',
+       values.mastery, changed, step, conceptId, id, ownerId, values.noticed_unknown]);
     // A concept the entry moved away from is deleted once it holds nothing.
     if (movedFrom != null) {
       await client.query(
@@ -740,6 +802,10 @@ async function ensureSchema() {
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'words';
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS mastered boolean NOT NULL DEFAULT false;
   `);
+  // "I don't remember": the parent chose no date. said_on stays NOT NULL and
+  // holds a sort-only day that is never shown. Added forward-only.
+  await pool.query(
+    'ALTER TABLE entries ADD COLUMN IF NOT EXISTS noticed_unknown boolean NOT NULL DEFAULT false');
   // The three-stage mastery and its journey (the creator's redesign). Rows
   // from before it map their boolean: mastered stays mastered, "still
   // learning" becomes practicing, and the journey starts as that one stage on

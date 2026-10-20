@@ -106,6 +106,14 @@
         ', ' + stage + ', ' + when;
     },
     alreadyLearned: 'Already learned',
+    dateNotRemembered: 'Date not remembered',
+    noDate: 'No date',
+    undatedNote: function (n) { return n + ' with no date ' + (n === 1 ? 'counts' : 'count') + ' in the total, not in the chart.'; },
+    pickDateOrUnknown: "Pick a date, or choose I don't remember.",
+    languages: 'Languages',
+    pickMoreThanOne: function (name) { return 'Pick more than one if ' + name + ' uses it in each.'; },
+    dontRemember: "I don't remember",
+    writeWordIn: function (lang) { return 'Write the word in ' + lang + '.'; },
 
     // Navigation
     navLabel: 'Main navigation',
@@ -357,6 +365,14 @@
         ', ' + stage + ', ' + when;
     },
     alreadyLearned: 'Ya aprendido',
+    dateNotRemembered: 'Fecha no recordada',
+    noDate: 'Sin fecha',
+    undatedNote: function (n) { return n + (n === 1 ? ' sin fecha cuenta' : ' sin fecha cuentan') + ' en el total, no en la gráfica.'; },
+    pickDateOrUnknown: 'Elige una fecha, o elige No me acuerdo.',
+    languages: 'Idiomas',
+    pickMoreThanOne: function (name) { return 'Elige más de uno si ' + name + ' lo usa en cada uno.'; },
+    dontRemember: 'No me acuerdo',
+    writeWordIn: function (lang) { return 'Escribe la palabra en ' + lang + '.'; },
 
     navLabel: 'Navegación principal',
     navHome: 'Inicio', navLog: 'Registro', navInsights: 'Avances',
