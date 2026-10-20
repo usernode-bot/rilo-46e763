@@ -18,6 +18,14 @@
     return y + '-' + String(m).padStart(2, '0');
   }
 
+  // A dated entry is one learned on a known day: not a quick-start pick
+  // (already learned) and not an "I don't remember" first (undated, whose
+  // said_on is a sort-only day). Totals and counts include the undated
+  // ones; growth and "this week" never do.
+  function isDated(e) {
+    return e.already_learned !== true && e.noticed_unknown !== true;
+  }
+
   // One card per word: a concept groups the entries that are the same word
   // in different languages. Mastery and dates stay on each entry; the group
   // only carries the word. An entry with no concept_id (an old cached state)
@@ -37,10 +45,14 @@
       g.entries.sort(function (a, b) { return (a.id || 0) - (b.id || 0); });
       g.title = g.entries[0];
       // A card is "already learned" only when every language on it came from
-      // a quick-start pick; otherwise it is filed at its first dated language.
-      var datedEntries = g.entries.filter(function (e) { return e.already_learned !== true; });
-      g.already_learned = datedEntries.length === 0;
-      var pool = g.already_learned ? g.entries : datedEntries;
+      // a quick-start pick, and "undated" only when every language on it was
+      // saved with "I don't remember"; otherwise it is filed at its first
+      // dated language (a mixed card shows that language's day).
+      var datedEntries = g.entries.filter(function (e) { return isDated(e); });
+      g.already_learned = datedEntries.length === 0 &&
+        g.entries.every(function (e) { return e.already_learned === true; });
+      g.undated = datedEntries.length === 0 && !g.already_learned;
+      var pool = datedEntries.length ? datedEntries : g.entries;
       g.first_on = pool.reduce(function (min, e) {
         return e.said_on < min ? e.said_on : min;
       }, pool[0].said_on);
@@ -50,9 +62,10 @@
 
   function summarize(entries, today) {
     // "Dated" firsts are the ones learned on a known day. Quick-start picks
-    // are flagged already_learned: they count in totals, languages and
-    // mastery, but never as something new learned this week or this month.
-    function dated(e) { return e.already_learned !== true; }
+    // are flagged already_learned and "I don't remember" firsts are flagged
+    // noticed_unknown: both count in totals, languages and mastery, but
+    // never as something new learned this week, this month or on the chart.
+    function dated(e) { return isDated(e); }
     var words = entries.filter(function (e) { return e.kind === 'word'; });
     var counts = { word: words.length, sound: 0, sign: 0, mastered: 0 };
     var languages = new Map();
@@ -66,7 +79,8 @@
     });
     var current = today.slice(0, 7);
     var end = monthIndex(current);
-    var first = words.reduce(function (min, e) { return e.said_on.slice(0, 7) < min ? e.said_on.slice(0, 7) : min; }, current);
+    var first = words.filter(function (e) { return dated(e); })
+      .reduce(function (min, e) { return e.said_on.slice(0, 7) < min ? e.said_on.slice(0, 7) : min; }, current);
     // Always show at least six months; long histories remain available.
     var start = Math.min(end - 5, monthIndex(first));
     var months = [];
@@ -86,14 +100,17 @@
     // seven months are shown, as before.
     var groups = groupConcepts(entries);
     var anyLearned = groups.some(function (g) { return g.already_learned; });
-    var firstAll = groups.reduce(function (min, g) { return g.first_on.slice(0, 7) < min ? g.first_on.slice(0, 7) : min; }, current);
+    // Undated cards carry a sort-only day: they sit out of the chart
+    // entirely, so they never pull its start earlier either.
+    var datedGroups = groups.filter(function (g) { return !g.undated; });
+    var firstAll = datedGroups.reduce(function (min, g) { return g.first_on.slice(0, 7) < min ? g.first_on.slice(0, 7) : min; }, current);
     var gStart = anyLearned ? monthIndex(firstAll) : Math.min(end - 6, monthIndex(firstAll));
     var running = 0;
     var growth = [];
     for (var g = gStart; g <= end; g++) {
       var gKey = monthKey(g);
-      var added = groups.filter(function (c) { return !c.already_learned && c.first_on.slice(0, 7) === gKey; }).length;
-      var baseline = groups.filter(function (c) { return c.already_learned && c.first_on.slice(0, 7) === gKey; }).length;
+      var added = datedGroups.filter(function (c) { return !c.already_learned && c.first_on.slice(0, 7) === gKey; }).length;
+      var baseline = datedGroups.filter(function (c) { return c.already_learned && c.first_on.slice(0, 7) === gKey; }).length;
       running += added;
       growth.push({ key: gKey, added: added, baseline: baseline, total: running });
     }
@@ -153,12 +170,12 @@
       var s = wStart.toISOString().slice(0, 10);
       var e = wEnd.toISOString().slice(0, 10);
       weeks.push({ start: s, end: e,
-        added: groups.filter(function (x) { return !x.already_learned && x.first_on >= s && x.first_on <= e; }).length,
-        baseline: groups.filter(function (x) { return x.already_learned && x.first_on >= s && x.first_on <= e; }).length,
-        total: groups.filter(function (x) { return !x.already_learned && x.first_on <= e; }).length });
+        added: datedGroups.filter(function (x) { return !x.already_learned && x.first_on >= s && x.first_on <= e; }).length,
+        baseline: datedGroups.filter(function (x) { return x.already_learned && x.first_on >= s && x.first_on <= e; }).length,
+        total: datedGroups.filter(function (x) { return !x.already_learned && x.first_on <= e; }).length });
     }
     if (anyLearned) {
-      var firstMonday = mondayOf(groups.reduce(function (min, x) { return x.first_on < min ? x.first_on : min; }, today)).toISOString().slice(0, 10);
+      var firstMonday = mondayOf(datedGroups.reduce(function (min, x) { return x.first_on < min ? x.first_on : min; }, today)).toISOString().slice(0, 10);
       while (weeks.length && weeks[0].start < firstMonday) weeks.shift();
     }
 
@@ -166,13 +183,14 @@
     return { counts: counts, languages: Array.from(languages.values()), months: months,
       thisMonth: entries.filter(function (e) { return dated(e) && e.said_on.slice(0, 7) === current; }),
       total: groups.length,
-      thisWeek: groups.filter(function (c) { return !c.already_learned && c.first_on >= weekStart && c.first_on <= today; }).length,
+      thisWeek: datedGroups.filter(function (c) { return !c.already_learned && c.first_on >= weekStart && c.first_on <= today; }).length,
       growth: growth, weeks: weeks, byLanguage: languageList, mastery: mastery,
       alreadyLearned: groups.filter(function (c) { return c.already_learned; }).length,
+      undated: groups.filter(function (c) { return c.undated; }).length,
       acrossLanguages: acrossLanguages };
   }
 
-  var api = { summarize: summarize, masteryOf: masteryOf, groupConcepts: groupConcepts };
+  var api = { summarize: summarize, masteryOf: masteryOf, groupConcepts: groupConcepts, isDated: isDated };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RiloInsights = api;
 })(typeof window !== 'undefined' ? window : globalThis);

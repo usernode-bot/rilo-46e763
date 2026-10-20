@@ -174,3 +174,58 @@ test('weeks stay eight with no entries, and the week starts on Monday', () => {
   // Sunday today: the week still starts the Monday before.
   assert.equal(summarize([], '2026-10-11').weeks[7].start, '2026-10-05');
 });
+test('a card of only undated entries is its own group, not already learned', () => {
+  const groups = groupConcepts([
+    { id: 3, kind: 'word', label: 'agua', concept_id: 7, said_on: '2026-10-20', noticed_unknown: true, language_name: 'Spanish', mastery: 'emerging' },
+    { id: 4, kind: 'word', label: 'water', concept_id: 7, said_on: '2026-10-20', noticed_unknown: true, language_name: 'English', mastery: 'emerging' },
+  ]);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].undated, true);
+  assert.equal(groups[0].already_learned, false);
+});
+test('a mixed card is filed at its dated language', () => {
+  const groups = groupConcepts([
+    { id: 1, kind: 'word', label: 'water', concept_id: 7, said_on: '2026-05-03', language_name: 'English', mastery: 'mastered', mastered: true },
+    { id: 2, kind: 'word', label: 'agua', concept_id: 7, said_on: '2026-10-20', noticed_unknown: true, language_name: 'Spanish', mastery: 'emerging' },
+  ]);
+  assert.equal(groups[0].undated, false);
+  assert.equal(groups[0].already_learned, false);
+  assert.equal(groups[0].first_on, '2026-05-03');
+});
+test('undated firsts count in totals but never in growth, weeks or this month', () => {
+  const data = summarize([
+    { id: 1, kind: 'word', said_on: '2026-10-20', language_name: 'English', mastery: 'emerging' },
+    { id: 2, kind: 'word', said_on: '2026-10-20', noticed_unknown: true, language_name: 'Spanish', mastery: 'emerging' },
+    { id: 3, kind: 'sound', said_on: '2026-10-20', noticed_unknown: true, mastery: 'practicing' },
+  ], '2026-10-21');
+  // Totals, languages and mastery keep them; the chart does not.
+  assert.equal(data.total, 3);
+  assert.equal(data.undated, 2);
+  assert.equal(data.thisWeek, 1);
+  assert.equal(data.thisMonth.length, 1);
+  assert.deepEqual(data.mastery, { emerging: 2, practicing: 1, mastered: 0 });
+  assert.deepEqual(data.byLanguage.map(l => [l.name, l.count]),
+    [['English', 1], ['Spanish', 1], ['No language', 1]]);
+  // Growth counts only the dated first; undated cards are never added,
+  // never baseline, and never in the running total.
+  assert.ok(data.growth.length >= 7);
+  assert.deepEqual(data.growth.slice(-1).map(m => [m.key, m.added, m.total]),
+    [['2026-10', 1, 1]]);
+  assert.ok(data.growth.slice(0, -1).every(m => m.added === 0 && m.baseline === 0));
+  // The monthly word chart counts dated words only.
+  assert.equal(data.months.slice(-1)[0].count, 1);
+  // The week that holds the dated first counts it; undated cards stay out.
+  assert.equal(data.weeks[7].added, 1);
+  assert.equal(data.weeks[7].total, 1);
+});
+test('undated entries alone leave the chart empty but the total honest', () => {
+  const data = summarize([
+    { kind: 'word', said_on: '2026-10-20', noticed_unknown: true, mastery: 'emerging' },
+    { kind: 'sign', said_on: '2026-10-20', noticed_unknown: true, mastery: 'mastered' },
+  ], '2026-10-21');
+  assert.equal(data.total, 2);
+  assert.equal(data.undated, 2);
+  assert.equal(data.thisWeek, 0);
+  assert.equal(data.thisMonth.length, 0);
+  assert.ok(data.growth.every(m => m.added === 0 && m.total === 0));
+});

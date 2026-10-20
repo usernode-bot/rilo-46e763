@@ -212,7 +212,7 @@ const ENTRY_SELECT = `
   SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id, e.concept_id,
          e.category, e.mastered, e.mastery, e.mastery_history,
          e.said_on::text AS said_on, e.note, e.is_demo, e.already_learned,
-         l.name AS language_name
+         e.noticed_unknown, l.name AS language_name
   FROM entries e LEFT JOIN languages l ON l.id = e.language_id
   WHERE e.id = $1 AND e.owner_id = $2`;
 
@@ -265,7 +265,7 @@ app.get('/api/state', wrap(async (req, res) => {
     `SELECT e.id, e.kind, e.label, e.sounds_like, e.language_id, e.concept_id,
             e.category, e.mastered, e.mastery, e.mastery_history,
             e.said_on::text AS said_on, e.note, e.is_demo, e.already_learned,
-            l.name AS language_name
+            e.noticed_unknown, l.name AS language_name
      FROM entries e LEFT JOIN languages l ON l.id = e.language_id
      WHERE e.owner_id = $1
      ORDER BY e.said_on DESC, e.id DESC`,
@@ -351,9 +351,14 @@ async function validateEntry(req, res, ownerId) {
     res.status(400).json({ error: 'Keep the note under 280 characters.' });
     return null;
   }
+  // "I don't remember": the parent saves the first without a date. The
+  // column stays NOT NULL, so the server keeps a sort-only day (today, or
+  // the birthday when the birth month is in the future) that screens never
+  // display; the row is flagged `noticed_unknown` instead.
+  const noticed_unknown = req.body.noticed_unknown === true;
   const said_on = validDate(req.body.said_on);
-  if (!said_on) {
-    res.status(400).json({ error: 'Pick a date.' });
+  if (!said_on && !noticed_unknown) {
+    res.status(400).json({ error: 'Pick a date, or choose I don\'t remember.' });
     return null;
   }
   const child = await pool.query(
@@ -363,14 +368,19 @@ async function validateEntry(req, res, ownerId) {
     res.status(400).json({ error: "Add your child's name and birthday first." });
     return null;
   }
-  if (said_on < child.rows[0].birthday) {
-    res.status(400).json({ error: 'Pick a date on or after the birthday.' });
-    return null;
+  if (!noticed_unknown) {
+    if (said_on < child.rows[0].birthday) {
+      res.status(400).json({ error: 'Pick a date on or after the birthday.' });
+      return null;
+    }
+    if (said_on > latestAllowedDay(req.now)) {
+      res.status(400).json({ error: 'Pick a date no later than today.' });
+      return null;
+    }
   }
-  if (said_on > latestAllowedDay(req.now)) {
-    res.status(400).json({ error: 'Pick a date no later than today.' });
-    return null;
-  }
+  const sort_day = noticed_unknown
+    ? (serverToday(req.now) < child.rows[0].birthday ? child.rows[0].birthday : serverToday(req.now))
+    : said_on;
   let language_id = null;
   if (req.body.language_id != null) {
     language_id = Number(req.body.language_id);
@@ -415,7 +425,9 @@ async function validateEntry(req, res, ownerId) {
     sounds_like: sounds_like || null,
     note: note || null,
     language_id,
-    said_on,
+    said_on: noticed_unknown ? null : said_on,
+    noticed_unknown,
+    sort_day,
     category: validCategory(req.body.category),
     mastery: validMastery(req.body),
     concept_id,
@@ -430,8 +442,45 @@ app.post('/api/entries', wrap(async (req, res) => {
   if (values.concept_id != null && values.concept_kind !== values.kind) {
     return res.status(400).json({ error: 'Link it to an entry of the same type.' });
   }
+  // The day a row is stored with: the real date, or, for an undated first,
+  // the sort-only day (never displayed).
+  const storedSaidOn = values.noticed_unknown ? values.sort_day : values.said_on;
+  // An add in several languages at once: one entry per extra language, all
+  // on one card. Each item needs its own owned language and its own word;
+  // they share the date (or lack of one), the mastery stage and the journey.
+  let alsoItems = [];
+  if (Array.isArray(req.body.also) && req.body.also.length) {
+    if (values.language_id == null) {
+      return res.status(400).json({ error: 'Choose one of your languages.' });
+    }
+    if (req.body.also.length > 9) {
+      return res.status(400).json({ error: 'Add up to 9 languages at a time.' });
+    }
+    const ids = [values.language_id];
+    for (const item of req.body.also) {
+      if (!item || typeof item !== 'object') {
+        return res.status(400).json({ error: 'Choose one of your languages.' });
+      }
+      const langId = Number(item.language_id);
+      if (!Number.isInteger(langId) || ids.indexOf(langId) !== -1) {
+        return res.status(400).json({ error: 'Choose one of your languages.' });
+      }
+      ids.push(langId);
+      const alsoLabel = typeof item.label === 'string' ? item.label.trim() : '';
+      if (alsoLabel.length < 1 || alsoLabel.length > 60) {
+        return res.status(400).json({ error: 'Write the word in each language.' });
+      }
+      alsoItems.push({ language_id: langId, label: alsoLabel, category: validCategory(item.category) });
+    }
+    const owned = await pool.query(
+      'SELECT id FROM languages WHERE owner_id = $1 AND id = ANY($2)',
+      [ownerId, ids]);
+    if (owned.rows.length !== ids.length) {
+      return res.status(400).json({ error: 'Choose one of your languages.' });
+    }
+  }
   // The journey starts on the day it was first noticed, at the stage chosen.
-  const history = JSON.stringify([{ level: values.mastery, on: values.said_on }]);
+  const history = JSON.stringify([{ level: values.mastery, on: storedSaidOn }]);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -446,12 +495,26 @@ app.post('/api/entries', wrap(async (req, res) => {
     }
     const inserted = await client.query(
       `INSERT INTO entries (owner_id, kind, label, sounds_like, language_id, said_on, note,
-                            category, mastered, mastery, mastery_history, concept_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)
+                            category, mastered, mastery, mastery_history, concept_id, noticed_unknown)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13)
        RETURNING id`,
       [ownerId, values.kind, values.label, values.sounds_like, values.language_id,
-       values.said_on, values.note, values.category, values.mastery === 'mastered',
-       values.mastery, history, conceptId]);
+       storedSaidOn, values.note, values.category, values.mastery === 'mastered',
+       values.mastery, history, conceptId, values.noticed_unknown]);
+    // The extra languages join the same card: same concept, same day (or
+    // none), same stage. They carry no "how it sounds" and no note of
+    // their own; the parent can give them one by editing.
+    for (const item of alsoItems) {
+      await client.query(
+        `INSERT INTO entries (owner_id, kind, label, language_id, said_on,
+                              category, mastered, mastery, mastery_history,
+                              concept_id, noticed_unknown)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)
+         RETURNING id`,
+        [ownerId, values.kind, item.label, item.language_id, storedSaidOn,
+         item.category, values.mastery === 'mastered', values.mastery,
+         history, conceptId, values.noticed_unknown]);
+    }
     // Same client as the INSERT: the row is not committed yet, so a pool
     // query would not see it.
     const row = await client.query(ENTRY_SELECT, [inserted.rows[0].id, ownerId]);
@@ -543,7 +606,7 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
   try {
     await client.query('BEGIN');
     const owned = await client.query(
-      'SELECT mastery, kind, concept_id FROM entries WHERE id = $1 AND owner_id = $2',
+      'SELECT mastery, kind, concept_id, said_on::text AS said_on FROM entries WHERE id = $1 AND owner_id = $2',
       [id, ownerId]);
     if (!owned.rows.length) {
       await client.query('ROLLBACK');
@@ -610,13 +673,19 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
         }
       }
     }
+    // An undated save ("I don't remember") keeps the row's stored day —
+    // only for sorting — and flags the row, so no screen shows a date or an
+    // age for it. A dated save clears the flag again. The day stored here is
+    // never the one the parent typed for an undated save: there is none.
+    const undated = values.noticed_unknown === true;
+    const storedSaidOn = undated ? current.said_on : values.said_on;
     // A change of stage is a step on the word's journey, dated today (the
     // request's own "now", so a staging preview's chosen moment rules it).
     // A first never earlier than the day it was first noticed.
     const changed = current.mastery !== values.mastery;
     const today = serverToday(req.now);
     const step = JSON.stringify([{
-      level: values.mastery, on: today < values.said_on ? values.said_on : today,
+      level: values.mastery, on: today < storedSaidOn ? storedSaidOn : today,
     }]);
     await client.query(
       `UPDATE entries
@@ -625,12 +694,14 @@ app.patch('/api/entries/:id', wrap(async (req, res) => {
            mastery_history = CASE WHEN $10::boolean
              THEN mastery_history || $11::jsonb ELSE mastery_history END,
            concept_id = $12,
-           already_learned = already_learned AND said_on = $5,
+           already_learned = CASE WHEN $13::boolean THEN false
+             ELSE already_learned AND said_on = $5 END,
+           noticed_unknown = $13::boolean,
            updated_at = NOW()
-       WHERE id = $13 AND owner_id = $14`,
+       WHERE id = $14 AND owner_id = $15`,
       [values.kind, values.label, values.sounds_like, values.language_id,
-       values.said_on, values.note, values.category, values.mastery === 'mastered',
-       values.mastery, changed, step, conceptId, id, ownerId]);
+       storedSaidOn, values.note, values.category, values.mastery === 'mastered',
+       values.mastery, changed, step, conceptId, undated, id, ownerId]);
     // A concept the entry moved away from is deleted once it holds nothing.
     if (movedFrom != null) {
       await client.query(
@@ -769,6 +840,12 @@ async function ensureSchema() {
           SELECT owner_id, created_at FROM entries WHERE NOT is_demo
           GROUP BY owner_id, created_at HAVING count(*) > 1)`);
   }
+  // "I don't remember" firsts (the creator's follow-up): the parent saves a
+  // first without a date. `noticed_unknown` marks the row; `said_on` stays
+  // NOT NULL and keeps a sort-only day that screens never display. No
+  // backfill: every existing row was dated on purpose.
+  await pool.query(
+    'ALTER TABLE entries ADD COLUMN IF NOT EXISTS noticed_unknown boolean NOT NULL DEFAULT false');
   // All five tables hold personal family data: private, and staged without
   // their rows (see "Public vs private tables" in the platform conventions).
   await pool.query(`COMMENT ON TABLE children IS 'staging:private'`);

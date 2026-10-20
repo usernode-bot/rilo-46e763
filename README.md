@@ -4,9 +4,9 @@ A calm, airy first-words tracker for parents: every word, sound and sign a child
 
 - **Welcome:** the child's name, birth month and year, and the languages at home (English, Spanish, ASL, French or any other), then an optional quick start of common words, sounds and signs.
 - **Home:** a large total of everything the child has (words, sounds and signs together), a "+N this week" pill, the cow mascot, Words / Sounds / Signs tiles and the four most recent entries.
-- **Log:** live search across words, how the child says or signs them, notes and languages; filter chips for kind, each language in use and Mastered; entries grouped by the child's age in months, each with its mastery glyph.
+- **Log:** live search across words, how the child says or signs them, notes and languages; filter chips for kind, each language in use and Mastered; entries grouped by the child's age in months, each with its mastery glyph. "Already learned" and "Date not remembered" groups sit at the end.
 - **Entry detail:** the word on its language's tint, when it was first noticed and how old the child was, its mastery stage, notes and its journey from stage to stage. Edit opens the add/edit sheet; Delete asks first.
-- **Add / edit:** Word, Sound or Sign (the "how" field becomes a gesture description for signs), language, date first noticed, pronunciation, notes and a three-stage mastery picker: Emerging, Practicing, Mastered.
+- **Add / edit:** Word, Sound or Sign (the "how" field becomes a gesture description for signs), language, date first noticed, pronunciation, notes and a three-stage mastery picker: Emerging, Practicing, Mastered. When adding, several languages can be picked at once: the same word is saved once per language, all on one card. "First noticed" is optional: leave it blank or tap "I don't remember" to save a first with no date.
 - **Insights:** a running total by month (the current month highlighted, with how many are new), a breakdown by language, mastery counts and three gentle play ideas. Tapping a language or a stage opens the log filtered to it.
 - **Profile:** edit the child's name and birth month and year.
 
@@ -19,6 +19,8 @@ Every icon and illustration is drawn in the **Offset** style: a fine ink line ov
 ## Data
 
 `children`, `languages`, `entries` and `demo_seeds` are private staging tables, every query scoped to the owner. Entries carry `mastery` (`emerging`, `practicing` or `mastered`) and `mastery_history` (each stage and the day it was reached); the older `mastered` boolean is kept in step. Rows from before the three stages were migrated on boot: mastered stays mastered, "still learning" became practicing.
+
+Entries saved with "I don't remember" carry `noticed_unknown`; their `said_on` keeps only a sort day (the day they were saved) that screens never display. They show as "Date not remembered", count in totals, languages and mastery, and stay out of the growth chart and "new this week".
 
 ## Preview and development
 

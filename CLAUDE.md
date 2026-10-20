@@ -187,6 +187,26 @@ The creator's Rilo canvas (Welcome, Home, Log, Add entry, Entry detail, Insights
   pre-change batches, told apart by their shared `created_at` (quick-start
   inserts run in one transaction); a single-pick batch stays dated. Demo
   rows are never flagged.
+- **One add, several languages, and "I don't remember" dates** (the
+  creator's follow-up): when adding, language chips are a multi-select and
+  the typed word is saved once per picked language, all on one concept
+  (`also: [{ language_id, label, category }]` on `POST /api/entries`, up to
+  9 extras, all sharing the date and mastery stage; "how it sounds" and
+  notes stay on the first picked language). Editing stays one language at a
+  time. "First noticed" is optional: empty or the "I don't remember" chip
+  sends `noticed_unknown: true` with no date. The row keeps
+  `entries.noticed_unknown` (added with `ADD COLUMN IF NOT EXISTS`, no
+  backfill); its `said_on` holds a sort-only day — today, clamped up to the
+  birthday — that screens never display. Undated firsts show "Date not
+  remembered" (badge "No date" in compact rows), gather in a last log group
+  after "Already learned", count in totals, languages and mastery, and stay
+  out of the growth chart, "new this week" and "this month"; a line under
+  the growth chart says how many are left out (`data.undated` from
+  `summarize`). A card is filed at a dated language's day when any of its
+  languages has one, and only fully undated cards go in the last group.
+  A PATCH that saves undated keeps the stored day, clears
+  `already_learned`, and clears `noticed_unknown` again when a date is
+  chosen. `isDated()` in `public/insights.js` decides what counts as dated.
 - The welcome asks for the **languages at home**; each one picked is
   created with `POST /api/languages` right after the child is saved.
 - **Sounds are animals AND things** (the creator's ask: car vroom,
